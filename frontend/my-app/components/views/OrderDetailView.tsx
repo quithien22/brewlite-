@@ -26,7 +26,7 @@ const LIVE: OrderStatus[] = ["PAID", "PREPARING", "READY"];
 
 function Progress({ status }: { status: OrderStatus }) {
   const current = FLOW.indexOf(status);
-  if (current === -1) return null; // PAYMENT_FAILED / CANCELLED: chỉ hiện nhãn trạng thái
+  if (current === -1) return null; // PAYMENT_FAILED / CANCELLED: chỉ hiện nhãn trạng thái.
   return (
     <ol className="flex items-center">
       {FLOW.map((s, i) => {

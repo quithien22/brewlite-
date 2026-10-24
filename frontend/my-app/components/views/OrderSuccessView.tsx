@@ -19,7 +19,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
     [id, ready],
   );
 
-  // Đơn chưa thanh toán xong thì không thuộc màn hình "thành công"
+  // Đơn chưa thanh toán xong thì không thuộc màn hình "thành công".
   useEffect(() => {
     if (!order) return;
     if (order.status === "PENDING" || order.status === "PAYMENT_FAILED") {
