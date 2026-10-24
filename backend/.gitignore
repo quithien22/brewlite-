@@ -1,0 +1,16 @@
+# dependencies
+/node_modules
+
+# build
+/dist
+/coverage
+*.tsbuildinfo
+
+# env (giữ lại .env.example)
+.env
+.env.*
+!.env.example
+
+# logs / os
+*.log
+.DS_Store

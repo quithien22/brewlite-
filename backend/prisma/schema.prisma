@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  WALLET
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING // đã "giữ chỗ" Idempotency-Key, đang chờ cổng thanh toán trả kết quả
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  phone         String?
+  passwordHash  String
+  role          Role     @default(CUSTOMER)
+  loyaltyPoints Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  orders Order[]
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String   @default("")
+  category    String
+  price       Int // giá cơ bản (VND), size S
+  imageUrl    String
+  stock       Int // tồn kho
+  version     Int      @default(0) // optimistic locking
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  orderItems OrderItem[]
+
+  @@index([category])
+}
+
+model Topping {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique
+  price    Int
+  isActive Boolean @default(true)
+}
+
+model Promotion {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique
+  title       String
+  description String       @default("")
+  type        DiscountType
+  value       Int // PERCENT: 1-100, FIXED: số tiền VND
+  minOrder    Int          @default(0)
+  maxDiscount Int? // trần giảm cho loại PERCENT
+  startsAt    DateTime
+  endsAt      DateTime
+  usageLimit  Int?
+  usedCount   Int          @default(0)
+  isActive    Boolean      @default(true)
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  userId        Int
+  user          User        @relation(fields: [userId], references: [id])
+  status        OrderStatus @default(PENDING)
+  subtotal      Int
+  discount      Int         @default(0) // giảm từ mã khuyến mãi
+  pointsUsed    Int         @default(0)
+  total         Int
+  couponCode    String?
+  note          String?
+  pointsEarned  Int         @default(0)
+  pointsAwarded Boolean     @default(false)
+  version       Int         @default(0) // optimistic locking cho state machine
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  items      OrderItem[]
+  payments   Payment[]
+  statusLogs OrderStatusLog[]
+
+  @@index([userId, createdAt])
+}
+
+model OrderItem {
+  id          Int     @id @default(autoincrement())
+  orderId     Int
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product @relation(fields: [productId], references: [id])
+  productName String
+  imageUrl    String
+  size        String
+  sugar       String
+  ice         String
+  toppings    Json // [{ id, name, price }]
+  unitPrice   Int
+  qty         Int
+  lineTotal   Int
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  orderId        Int
+  order          Order         @relation(fields: [orderId], references: [id])
+  idempotencyKey String        @unique
+  amount         Int
+  method         PaymentMethod
+  provider       String
+  status         PaymentStatus
+  transactionId  String?
+  failureReason  String?
+  createdAt      DateTime      @default(now())
+
+  @@index([orderId])
+}
+
+model OrderStatusLog {
+  id        Int         @id @default(autoincrement())
+  orderId   Int
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+}
