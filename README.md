@@ -53,6 +53,7 @@ npx prisma studio
 | Nhân viên quầy | `staff@brewlite.vn` / `Staff1234` |
 | Mã khuyến mãi | `CHAO10`, `GIAM15K`, `COMBO20` |
 
+
 Cập nhật tiến độ đơn (barista) bằng `PATCH /orders/:id/status` với token của tài khoản STAFF; trang chi tiết đơn của khách tự làm mới mỗi 8 giây.
 
 ## Đối chiếu 10 task của đề bài
