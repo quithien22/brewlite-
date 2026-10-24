@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { btnPrimary, card, container } from "@/components/ui/classes";
 import OrderSummaryCard from "@/components/ui/OrderSummaryCard";
 import ProductImage from "@/components/ui/ProductImage";
@@ -12,7 +12,7 @@ import { calcCartTotals } from "@/lib/cart-totals";
 import { describeOptions, vnd } from "@/lib/format";
 import { useRequireAuth } from "@/lib/hooks";
 import { newIdempotencyKey } from "@/lib/idempotency";
-import type { PaymentMethod } from "@/lib/types";
+import type { CartLine, Order, PaymentMethod } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { useCartStore } from "@/store/cart";
 
@@ -20,6 +20,44 @@ const METHODS: { value: PaymentMethod; title: string; hint: string }[] = [
   { value: "WALLET", title: "Ví điện tử", hint: "Thanh toán qua MoMo (mô phỏng)" },
   { value: "CARD", title: "Thẻ ngân hàng", hint: "Thanh toán qua VNPay (mô phỏng)" },
 ];
+
+// So sánh đơn PENDING với giỏ hàng hiện tại để không trả tiền nhầm đơn cũ.
+function lineSignature(item: {
+  productId: number;
+  size: string;
+  sugar: string;
+  ice: string;
+  toppings: { id: number }[];
+  qty: number;
+}) {
+  const toppingIds = item.toppings.map((t) => t.id).sort((a, b) => a - b);
+  return JSON.stringify([
+    item.productId, item.size, item.sugar, item.ice, toppingIds, item.qty,
+  ]);
+}
+
+function matchesCart(
+  order: Order,
+  lines: CartLine[],
+  couponCode: string | undefined,
+  pointsUsed: number,
+  note: string,
+): boolean {
+  const cartItems = lines.map(lineSignature).sort();
+  const orderItems = order.items.map(lineSignature).sort();
+  return (
+    JSON.stringify(cartItems) === JSON.stringify(orderItems) &&
+    (order.couponCode ?? '').toUpperCase() === (couponCode ?? '').toUpperCase() &&
+    order.pointsUsed === pointsUsed &&
+    (order.note ?? '').trim() === note.trim()
+  );
+}
+
+// Dùng lại key khi request trả lỗi mạng: tránh gọi cổng thanh toán hai lần.
+const IDEMPOTENCY_PREFIX = 'brewlite-mock-payment:';
+const ALLOW_DEMO_FAILURE =
+  process.env.NODE_ENV !== 'production' ||
+  process.env.NEXT_PUBLIC_ALLOW_MOCK_FAILURE === 'true';
 
 export default function CheckoutView() {
   const router = useRouter();
@@ -40,6 +78,30 @@ export default function CheckoutView() {
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submitting = useRef(false);
+  const memoryKeys = useRef(new Map<string, string>());
+
+  function getPaymentKey(orderId: number, paymentMethod: PaymentMethod): string {
+    const storageKey = `${IDEMPOTENCY_PREFIX}${orderId}:${paymentMethod}`;
+    const cached = memoryKeys.current.get(storageKey);
+    if (cached) return cached;
+    let key: string | null = null;
+    try {
+      key = window.localStorage.getItem(storageKey);
+    } catch { /* Private browsing / blocked storage */ }
+    key ??= newIdempotencyKey();
+    memoryKeys.current.set(storageKey, key);
+    try {
+      window.localStorage.setItem(storageKey, key);
+    } catch { /* Still reuse the in-memory key */ }
+    return key;
+  }
+
+  function clearPaymentKey(orderId: number, paymentMethod: PaymentMethod) {
+    const storageKey = `${IDEMPOTENCY_PREFIX}${orderId}:${paymentMethod}`;
+    memoryKeys.current.delete(storageKey);
+    try { window.localStorage.removeItem(storageKey); } catch { /* ignored */ }
+  }
 
   if (!ready || !cartHydrated) return <Loading />;
 
@@ -59,56 +121,92 @@ export default function CheckoutView() {
   const totals = calcCartTotals(lines, coupon, pointsToUse, user?.loyaltyPoints ?? 0);
 
   async function confirm() {
-    if (busy) return;
+    if (submitting.current || busy) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
-      // Đơn dang dở của lần trước (nếu có) phải được hủy để hoàn kho / mã / điểm
-      if (pendingOrderId) {
-        await api.orders.cancel(pendingOrderId).catch(() => {});
-        setPendingOrderId(null);
+      let order: Order;
+      if (pendingOrderId !== null) {
+        // Không tự động hủy đơn cũ rồi tạo đơn mới: request thanh toán
+        // trước đó có thể đã thành công nhưng client chưa nhận phản hồi.
+        order = await api.orders.get(pendingOrderId);
+        if (order.status === 'PAID') {
+          clear();
+          router.replace(`/orders/${order.id}/success`);
+          return;
+        }
+        if (order.status === 'PAYMENT_FAILED') {
+          router.replace(`/orders/${order.id}/failed`);
+          return;
+        }
+        if (order.status === 'CANCELLED') {
+          setPendingOrderId(null);
+          // Chỉ tạo đơn mới sau khi xác nhận đơn trước đã bị hủy.
+          order = await api.orders.create({
+            items: lines.map((l) => ({
+              productId: l.productId, size: l.size, sugar: l.sugar,
+              ice: l.ice, toppingIds: l.toppings.map((t) => t.id), qty: l.qty,
+            })),
+            couponCode: coupon?.code,
+            pointsToUse: totals.points > 0 ? totals.points : undefined,
+            note: note.trim() || undefined,
+          });
+          setPendingOrderId(order.id);
+        } else if (order.status !== 'PENDING') {
+          clear();
+          router.replace(`/orders/${order.id}`);
+          return;
+        } else if (!matchesCart(order, lines, coupon?.code, totals.points, note)) {
+          throw new Error(
+            `Đơn ${order.code} đang chờ thanh toán nhưng giỏ hàng đã thay đổi. ` +
+            'Hãy xem và hủy đơn cũ trong Lịch sử đơn hàng trước khi đặt đơn mới.',
+          );
+        }
+      } else {
+        // Tạo đơn ở PENDING, mọi giá/giảm giá phải được tính lại tại backend.
+        order = await api.orders.create({
+          items: lines.map((l) => ({
+            productId: l.productId, size: l.size, sugar: l.sugar,
+            ice: l.ice, toppingIds: l.toppings.map((t) => t.id), qty: l.qty,
+          })),
+          couponCode: coupon?.code,
+          pointsToUse: totals.points > 0 ? totals.points : undefined,
+          note: note.trim() || undefined,
+        });
+        setPendingOrderId(order.id);
       }
-
-      const order = await api.orders.create({
-        items: lines.map((l) => ({
-          productId: l.productId,
-          size: l.size,
-          sugar: l.sugar,
-          ice: l.ice,
-          toppingIds: l.toppings.map((t) => t.id),
-          qty: l.qty,
-        })),
-        couponCode: coupon?.code,
-        pointsToUse: totals.points > 0 ? totals.points : undefined,
-        note: note.trim() || undefined,
-      });
-      setPendingOrderId(order.id);
 
       const result = await api.payments.pay(
         {
           orderId: order.id,
           method,
-          simulateFailure: simulateFailure || undefined,
+          simulateFailure: ALLOW_DEMO_FAILURE && simulateFailure ? true : undefined,
         },
-        newIdempotencyKey(),
+        getPaymentKey(order.id, method),
       );
 
+      // Kết quả đã xác định: nếu khách muốn thử giao dịch khác, phải tạo key mới.
+      clearPaymentKey(order.id, method);
       if (result.success) {
         clear();
         api.auth.me().then(setUser).catch(() => {});
         router.replace(`/orders/${order.id}/success`);
       } else {
-        // Giữ nguyên giỏ hàng để khách thử lại
+        // Trạng thái PAYMENT_FAILED: không xóa giỏ hàng
         router.replace(`/orders/${order.id}/failed`);
       }
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.isNetwork
-            ? "Mất kết nối tới máy chủ. Giỏ hàng vẫn được giữ, bạn thử lại nhé."
+            ? 'Mất kết nối đến server. KHÔNG bấm đặt lại liên tục. ' +
+              'Hãy kiểm tra Lịch sử đơn hàng hoặc thử lại với yêu cầu hiện tại.'
             : err.message
-          : "Đã có lỗi xảy ra",
+          : err instanceof Error ? err.message : 'Đã xảy ra lỗi',
       );
+    } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
@@ -179,7 +277,7 @@ export default function CheckoutView() {
               })}
             </div>
 
-            <label className="mt-5 flex cursor-pointer items-start gap-2 rounded-lg border border-dashed border-line px-4 py-3 text-xs text-muted">
+            {ALLOW_DEMO_FAILURE && <label className="mt-5 flex cursor-pointer items-start gap-2 rounded-lg border border-dashed border-line px-4 py-3 text-xs text-muted">
               <input
                 type="checkbox"
                 checked={simulateFailure}
@@ -190,7 +288,7 @@ export default function CheckoutView() {
                 <b className="text-ink">Chế độ demo:</b> mô phỏng thanh toán thất bại để xem
                 màn hình lỗi (đơn chuyển sang PAYMENT_FAILED, giỏ hàng được giữ nguyên).
               </span>
-            </label>
+            </label>}
           </section>
         </div>
 

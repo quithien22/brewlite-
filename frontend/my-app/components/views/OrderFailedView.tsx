@@ -32,7 +32,7 @@ export default function OrderFailedView({ id }: { id: number }) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Đơn đã thanh toán / đã xử lý thì không còn là màn hình "thất bại"
+  // Đơn đã thanh toán / đã xử lý thì không còn là màn hình "thất bại".
   useEffect(() => {
     if (!order) return;
     if (order.status === "PAID") router.replace(`/orders/${order.id}/success`);
