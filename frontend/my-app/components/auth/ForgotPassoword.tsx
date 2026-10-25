@@ -1,5 +1,6 @@
+// Quên mật khẩu
 "use client";
-
+ 
 import Link from "next/link";
 import { useState } from "react";
 import { btnPrimary, input } from "@/components/ui/classes";

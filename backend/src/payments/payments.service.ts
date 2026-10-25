@@ -1,22 +1,23 @@
+//Xử lý việc thành công hay thất bại, đổi trạng thái đơn hàng và cộng điểm
 import {
   ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { OrdersService } from '../orders/orders.service';
-import { transitionOrder } from '../orders/order-transitions';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { MockPaymentGateway } from './mock-payment.gateway';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { OrdersService } from "../orders/orders.service";
+import { transitionOrder } from "../orders/order-transitions";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreatePaymentDto } from "./dto/create-payment.dto";
+import { MockPaymentGateway } from "./mock-payment.gateway";
 
 /** Giao dịch PENDING quá lâu (server chết giữa chừng) sẽ không còn chặn đơn. */
 const PENDING_TTL_MS = 2 * 60 * 1000;
 
 function isUniqueViolation(e: unknown): boolean {
   return (
-    e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002'
+    e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002"
   );
 }
 
@@ -52,22 +53,22 @@ export class PaymentsService {
         const order = await tx.order.findFirst({
           where: { id: dto.orderId, userId },
         });
-        if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
-        if (order.status !== 'PENDING' && order.status !== 'PAYMENT_FAILED') {
+        if (!order) throw new NotFoundException("Không tìm thấy đơn hàng");
+        if (order.status !== "PENDING" && order.status !== "PAYMENT_FAILED") {
           throw new ConflictException(
-            'Đơn hàng không ở trạng thái chờ thanh toán',
+            "Đơn hàng không ở trạng thái chờ thanh toán",
           );
         }
 
         const inflight = await tx.payment.count({
           where: {
             orderId: order.id,
-            status: 'PENDING',
+            status: "PENDING",
             createdAt: { gt: new Date(Date.now() - PENDING_TTL_MS) },
           },
         });
         if (inflight > 0) {
-          throw new ConflictException('Đơn hàng đang được xử lý thanh toán');
+          throw new ConflictException("Đơn hàng đang được xử lý thanh toán");
         }
 
         // Khóa lạc quan: chỉ 1 request cùng lúc qua được bước này
@@ -77,14 +78,14 @@ export class PaymentsService {
         });
         if (locked.count !== 1) {
           throw new ConflictException(
-            'Đơn hàng vừa được cập nhật, vui lòng thử lại',
+            "Đơn hàng vừa được cập nhật, vui lòng thử lại",
           );
         }
-        if (order.status === 'PAYMENT_FAILED') {
+        if (order.status === "PAYMENT_FAILED") {
           await transitionOrder(
             tx,
             { id: order.id, status: order.status, version: order.version + 1 },
-            'PENDING',
+            "PENDING",
           );
         }
 
@@ -95,7 +96,7 @@ export class PaymentsService {
             amount: order.total,
             method: dto.method,
             provider: this.gateway.providerName(dto.method),
-            status: 'PENDING',
+            status: "PENDING",
           },
         });
         return { id: payment.id, amount: order.total };
@@ -115,7 +116,7 @@ export class PaymentsService {
     }
 
     // ---- Bước 2: gọi cổng thanh toán (ngoài transaction) ----
-    let result: Awaited<ReturnType<MockPaymentGateway['charge']>>;
+    let result: Awaited<ReturnType<MockPaymentGateway["charge"]>>;
     try {
       result = await this.gateway.charge({
         orderId: dto.orderId,
@@ -127,7 +128,7 @@ export class PaymentsService {
       result = {
         ok: false,
         provider: this.gateway.providerName(dto.method),
-        failureReason: 'Cổng thanh toán không phản hồi',
+        failureReason: "Cổng thanh toán không phản hồi",
       };
     }
 
@@ -138,15 +139,15 @@ export class PaymentsService {
       });
 
       // Đơn đã bị hủy trong lúc chờ cổng thanh toán
-      if (order.status !== 'PENDING') {
+      if (order.status !== "PENDING") {
         await tx.payment.update({
           where: { id: paymentId },
           data: {
-            status: result.ok ? 'REFUNDED' : 'FAILED',
+            status: result.ok ? "REFUNDED" : "FAILED",
             provider: result.provider,
             transactionId: result.transactionId,
             failureReason: result.ok
-              ? 'Đơn đã bị hủy, tiền được hoàn lại'
+              ? "Đơn đã bị hủy, tiền được hoàn lại"
               : result.failureReason,
           },
         });
@@ -156,13 +157,13 @@ export class PaymentsService {
       await tx.payment.update({
         where: { id: paymentId },
         data: {
-          status: result.ok ? 'SUCCESS' : 'FAILED',
+          status: result.ok ? "SUCCESS" : "FAILED",
           provider: result.provider,
           transactionId: result.transactionId,
           failureReason: result.failureReason,
         },
       });
-      await transitionOrder(tx, order, result.ok ? 'PAID' : 'PAYMENT_FAILED');
+      await transitionOrder(tx, order, result.ok ? "PAID" : "PAYMENT_FAILED");
 
       if (result.ok) {
         // Cộng điểm đúng 1 lần cho mỗi đơn
@@ -185,15 +186,20 @@ export class PaymentsService {
   private async replay(
     userId: number,
     dto: CreatePaymentDto,
-    existing: { id: number; orderId: number; status: string; order: { userId: number } },
+    existing: {
+      id: number;
+      orderId: number;
+      status: string;
+      order: { userId: number };
+    },
   ) {
     if (existing.order.userId !== userId || existing.orderId !== dto.orderId) {
       throw new UnprocessableEntityException(
-        'Idempotency-Key đã được dùng cho một yêu cầu thanh toán khác',
+        "Idempotency-Key đã được dùng cho một yêu cầu thanh toán khác",
       );
     }
-    if (existing.status === 'PENDING') {
-      throw new ConflictException('Giao dịch đang được xử lý, vui lòng đợi');
+    if (existing.status === "PENDING") {
+      throw new ConflictException("Giao dịch đang được xử lý, vui lòng đợi");
     }
     return this.buildResponse(userId, existing.id, true);
   }
@@ -206,11 +212,11 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
     });
-    if (!payment) throw new NotFoundException('Không tìm thấy giao dịch');
+    if (!payment) throw new NotFoundException("Không tìm thấy giao dịch");
     const order = await this.orders.findOneForUser(userId, payment.orderId);
 
     return {
-      success: payment.status === 'SUCCESS',
+      success: payment.status === "SUCCESS",
       replayed,
       payment: {
         id: payment.id,

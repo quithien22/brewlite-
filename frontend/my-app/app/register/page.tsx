@@ -1,3 +1,5 @@
+// 
+
 import type { Metadata } from "next";
 import Register from "@/components/auth/Register";
 

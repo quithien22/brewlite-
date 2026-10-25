@@ -23,7 +23,7 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
-  /** status 0 = không gọi được máy chủ (mất mạng / backend tắt) */
+  /** status 0 = không gọi được máy chủ (mất mạng / backend tắt). */
   get isNetwork() {
     return this.status === 0;
   }

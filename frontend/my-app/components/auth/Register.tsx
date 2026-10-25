@@ -1,3 +1,4 @@
+//Đăng ký 
 "use client";
 
 import Link from "next/link";
@@ -88,7 +89,6 @@ export default function Register() {
       <div className="flex w-full max-w-[1280px] flex-col items-start gap-6 md:flex-row">
         {/* Cột trái: hình ảnh & thông điệp */}
         <div className="flex w-full flex-col gap-6 md:w-1/2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=800&q=80"
             alt="Bàn cà phê"
