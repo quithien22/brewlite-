@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import type { PaymentMethod } from '@prisma/client';
+//Giả lập phản hồi từ cổng MoMo/VNPay (thành công/thất bại)
+import { Injectable } from "@nestjs/common";
+import type { PaymentMethod } from "@prisma/client";
 
 export interface ChargeRequest {
   orderId: number;
@@ -20,7 +21,7 @@ export interface ChargeResult {
 @Injectable()
 export class MockPaymentGateway {
   providerName(method: PaymentMethod): string {
-    return method === 'WALLET' ? 'MoMo' : 'VNPay';
+    return method === "WALLET" ? "MoMo" : "VNPay";
   }
 
   async charge(req: ChargeRequest): Promise<ChargeResult> {
@@ -31,7 +32,7 @@ export class MockPaymentGateway {
       return {
         ok: false,
         provider,
-        failureReason: 'Giao dịch bị từ chối hoặc hết thời gian chờ',
+        failureReason: "Giao dịch bị từ chối hoặc hết thời gian chờ",
       };
     }
     return {
