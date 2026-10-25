@@ -1,10 +1,10 @@
+//Đặt hàng thành công
 import React from "react";
 import Link from "next/link";
 
 export default function OrderSuccessPage() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col justify-between font-sans">
-      
       {/* ================= PHẦN NỘI DUNG CHÍNH (MAIN CONTENT) ================= */}
       <main className="w-full flex justify-center py-10">
         <div className="w-[1440px] px-10 flex flex-col gap-6">
@@ -207,10 +207,16 @@ export default function OrderSuccessPage() {
 
               {/* Các nút bấm hành động */}
               <div className="flex flex-col gap-3">
-                <Link href="/chi-tiet-don-hang" className="w-full block text-center bg-[#6F4E37] text-white py-3 rounded-xl font-semibold hover:bg-opacity-90 transition-all shadow-sm">
+                <Link
+                  href="/chi-tiet-don-hang"
+                  className="w-full block text-center bg-[#6F4E37] text-white py-3 rounded-xl font-semibold hover:bg-opacity-90 transition-all shadow-sm"
+                >
                   Theo dõi đơn
                 </Link>
-                <Link href="/" className="w-full block text-center bg-white border border-[#E0D6CC] text-[#2B2118] py-3 rounded-xl font-semibold hover:bg-[#FAF8F5] transition-all">
+                <Link
+                  href="/"
+                  className="w-full block text-center bg-white border border-[#E0D6CC] text-[#2B2118] py-3 rounded-xl font-semibold hover:bg-[#FAF8F5] transition-all"
+                >
                   Về trang chủ
                 </Link>
               </div>
@@ -218,9 +224,6 @@ export default function OrderSuccessPage() {
           </div>
         </div>
       </main>
-
-      
-     
     </div>
   );
 }
