@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+/**
+ * Interface cấu trúc dữ liệu trả về cho Frontend (khớp với ProductDetail)
+ */
 import { Prisma } from '@prisma/client';
 import {
   DEFAULT_ICE,
