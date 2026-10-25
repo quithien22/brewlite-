@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { useCart } from './pages/context/CartContext';
+import { cartCount, useCartStore } from "@/store/cart";
 
 export default function Header() {
-  const { totalCartCount } = useCart();
+ const totalCartCount = useCartStore((state) =>
+  cartCount(state.lines)
 
+);
   return (
     <div className="w-full bg-[#F5EBDD] flex justify-center font-sans">
       
@@ -21,8 +23,8 @@ export default function Header() {
         {/* Phần 2: Menu điều hướng */}
         <nav className="flex gap-8 text-[#2B2118] font-semibold text-sm">
           <Link href="/" className="hover:text-[#6F4E37] transition-colors">Trang chủ</Link>
-          <Link href="/thuc-don" className="hover:text-[#6F4E37] transition-colors">Thực đơn</Link>
-          <Link href="/chi-tiet-don-hang" className="hover:text-[#6F4E37] transition-colors">Đơn hàng</Link>
+          <Link href="/menu" className="hover:text-[#6F4E37] transition-colors">Thực đơn</Link>
+          <Link href="/orders" className="hover:text-[#6F4E37] transition-colors">Đơn hàng</Link>
         </nav>
 
         {/* Phần 3: Công cụ & Tài khoản */}
@@ -38,7 +40,7 @@ export default function Header() {
             </button>
             
             {/* Icon Giỏ hàng - KẾT NỐI VỚI /gio-hang VÀ HIỂN THỊ SỐ LƯỢNG THỰC TẾ */}
-            <Link href="/gio-hang" className="hover:text-[#6F4E37] transition-colors relative" title="Giỏ hàng">
+            <Link href="/cart" className="hover:text-[#6F4E37] transition-colors relative" title="Giỏ hàng">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
