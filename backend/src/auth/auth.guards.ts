@@ -11,7 +11,7 @@ import { AuthGuard } from '@nestjs/passport';
 import type { Role } from '@prisma/client';
 import type { AuthUser } from './jwt.strategy';
 
-/** Bảo vệ route bằng JWT (Bearer token). */
+/** Bảo vệ route bằng JWT (Bearer token).  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {}
 

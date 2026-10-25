@@ -1,7 +1,8 @@
 /**
  * Dữ liệu mẫu cho BrewLite (chạy: `npm run seed` hoặc `npx prisma db seed`).
  * Có thể chạy lại nhiều lần: không tạo trùng, không ghi đè điểm thưởng của user.
- */
+ 
+*/
 import { DiscountType, PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 

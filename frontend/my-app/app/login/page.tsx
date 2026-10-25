@@ -1,3 +1,5 @@
+// 
+
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Login from "@/components/auth/Login";

@@ -7,7 +7,8 @@ type Db = Parameters<typeof reserveStock>[0];
  * CSDL giả lập 1 sản phẩm với cột `version` giống Prisma/PostgreSQL:
  * `updateMany({ where: { version } })` chỉ thành công nếu version chưa đổi.
  * Mỗi lệnh đọc/ghi nhường event loop để các request "đặt cùng lúc" xen kẽ nhau.
- */
+
+*/
 function makeDb(initialStock: number) {
   const row = { name: 'Cà phê sữa', stock: initialStock, version: 0 };
   const tick = () => new Promise<void>((resolve) => setImmediate(resolve));

@@ -10,7 +10,8 @@ type ProductDb = Pick<Prisma.TransactionClient, 'product'>;
  * `WHERE version = <đã đọc>`. Nếu có khách khác vừa mua, version đã đổi →
  * count = 0 → đọc lại và thử lại. Nhờ đó tồn kho không bao giờ âm.
  * Sản phẩm được xử lý theo thứ tự id tăng dần để tránh deadlock.
- */
+ 
+*/
 export async function reserveStock(
   db: ProductDb,
   needs: Map<number, number>,
