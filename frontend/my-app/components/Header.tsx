@@ -1,165 +1,68 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { initials } from "@/lib/format";
-import { useAuthStore } from "@/store/auth";
-import { cartCount, useCartStore } from "@/store/cart";
-
-const NAV = [
-  { href: "/", label: "Trang chủ" },
-  { href: "/menu", label: "Thực đơn" },
-  { href: "/promotions", label: "Khuyến mãi" },
-  { href: "/about", label: "Về chúng tôi" },
-  { href: "/contact", label: "Liên hệ" },
-];
+import Link from 'next/link';
+import React from 'react';
+import { useCart } from './pages/context/CartContext';
 
 export default function Header() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const token = useAuthStore((s) => s.token);
-  const hydrated = useAuthStore((s) => s.hydrated);
-  const logout = useAuthStore((s) => s.logout);
-  const count = useCartStore((s) => cartCount(s.lines));
-  const [open, setOpen] = useState(false);
-
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const { totalCartCount } = useCart();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white">
-      <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-6 px-6 py-4">
-        <Link
-          href="/"
-          className="text-3xl font-bold tracking-tight text-brand"
-        >
+    <div className="w-full bg-[#F5EBDD] flex justify-center font-sans">
+      
+      {/* Container giới hạn chiều rộng 1440px */}
+      <header className="w-[1440px] px-10 py-5 flex items-center justify-between">
+        
+        {/* Phần 1: Logo */}
+        <Link href="/" className="text-[#6F4E37] text-3xl font-bold font-serif tracking-wider">
           BrewLite
         </Link>
 
-        <nav className="hidden gap-8 text-sm font-semibold text-ink md:flex">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={`transition-colors hover:text-brand ${
-                isActive(n.href) ? "text-brand" : ""
-              }`}
-            >
-              {n.label}
-            </Link>
-          ))}
+        {/* Phần 2: Menu điều hướng */}
+        <nav className="flex gap-8 text-[#2B2118] font-semibold text-sm">
+          <Link href="/" className="hover:text-[#6F4E37] transition-colors">Trang chủ</Link>
+          <Link href="/thuc-don" className="hover:text-[#6F4E37] transition-colors">Thực đơn</Link>
+          <Link href="/chi-tiet-don-hang" className="hover:text-[#6F4E37] transition-colors">Đơn hàng</Link>
         </nav>
 
-        <div className="flex items-center gap-5">
-          <Link
-            href="/menu"
-            aria-label="Tìm đồ uống"
-            className="text-muted hover:text-brand"
-          >
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </Link>
-
-          <Link
-            href="/cart"
-            aria-label="Giỏ hàng"
-            className="relative text-muted hover:text-brand"
-          >
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-              />
-            </svg>
-            {count > 0 && (
-              <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
-                {count}
-              </span>
-            )}
-          </Link>
-
-          {hydrated && token && user ? (
-            <div className="relative">
-              <button
-                onClick={() => setOpen((o) => !o)}
-                className="flex items-center gap-2 text-sm font-semibold text-ink"
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-xs font-bold text-brand">
-                  {initials(user.name)}
+        {/* Phần 3: Công cụ & Tài khoản */}
+        <div className="flex items-center gap-8">
+          
+          {/* Các Icon */}
+          <div className="flex items-center gap-5 text-[#74665B]">
+            {/* Icon Tìm kiếm */}
+            <button className="hover:text-[#6F4E37] transition-colors" title="Tìm kiếm">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+            
+            {/* Icon Giỏ hàng - KẾT NỐI VỚI /gio-hang VÀ HIỂN THỊ SỐ LƯỢNG THỰC TẾ */}
+            <Link href="/gio-hang" className="hover:text-[#6F4E37] transition-colors relative" title="Giỏ hàng">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              {/* Badge số lượng thực tế trong giỏ */}
+              {totalCartCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-[#6F4E37] text-[#FFFFFF] text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center animate-in zoom-in-50">
+                  {totalCartCount > 99 ? '99+' : totalCartCount}
                 </span>
-                <span className="hidden sm:inline">{user.name}</span>
-                <span className="text-muted">▾</span>
-              </button>
-              {open && (
-                <>
-                  <button
-                    aria-label="Đóng menu"
-                    className="fixed inset-0 z-10 cursor-default"
-                    onClick={() => setOpen(false)}
-                  />
-                  <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-line bg-white p-2 text-sm shadow-lg">
-                    <p className="px-3 py-2 text-xs text-muted">
-                      {user.loyaltyPoints} điểm thưởng
-                    </p>
-                    <Link
-                      href="/orders"
-                      onClick={() => setOpen(false)}
-                      className="block rounded-lg px-3 py-2 hover:bg-cream"
-                    >
-                      Lịch sử đơn hàng
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setOpen(false);
-                        logout();
-                        router.push("/");
-                      }}
-                      className="block w-full rounded-lg px-3 py-2 text-left text-danger hover:bg-cream"
-                    >
-                      Đăng xuất
-                    </button>
-                  </div>
-                </>
               )}
-            </div>
-          ) : hydrated ? (
-            <div className="flex items-center gap-5">
-              <Link
-                href="/login"
-                className="text-sm font-semibold text-muted hover:text-brand"
-              >
-                Đăng nhập
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-              >
-                Đăng ký
-              </Link>
-            </div>
-          ) : null}
+            </Link>
+          </div>
+
+          {/* Nút Đăng nhập / Đăng ký */}
+          <div className="flex items-center gap-5">
+            <Link href="/login" className="text-[#74665B] text-sm font-semibold hover:text-[#6F4E37] transition-colors">
+              Đăng nhập
+            </Link>
+            <Link href="/register" className="bg-[#6F4E37] text-[#FFFFFF] text-sm px-6 py-2.5 rounded-lg font-semibold hover:bg-opacity-90 transition-all shadow-sm">
+              Đăng ký
+            </Link>
+          </div>
+          
         </div>
-      </div>
-    </header>
+      </header>
+    </div>
   );
 }
