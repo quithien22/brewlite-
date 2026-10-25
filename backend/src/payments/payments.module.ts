@@ -1,9 +1,8 @@
-//Khai báo và kết nối các thành phần trên lại với nhau
-import { Module } from "@nestjs/common";
-import { OrdersModule } from "../orders/orders.module";
-import { MockPaymentGateway } from "./mock-payment.gateway";
-import { PaymentsController } from "./payments.controller";
-import { PaymentsService } from "./payments.service";
+import { Module } from '@nestjs/common';
+import { OrdersModule } from '../orders/orders.module';
+import { MockPaymentGateway } from './mock-payment.gateway';
+import { PaymentsController } from './payments.controller';
+import { PaymentsService } from './payments.service';
 
 @Module({
   imports: [OrdersModule],

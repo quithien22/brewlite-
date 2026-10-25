@@ -1,6 +1,6 @@
-//Giả lập phản hồi từ cổng MoMo/VNPay (thành công/thất bại)
-import { Injectable } from "@nestjs/common";
-import type { PaymentMethod } from "@prisma/client";
+import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { PaymentMethod } from '@prisma/client';
 
 export interface ChargeRequest {
   orderId: number;
@@ -21,7 +21,7 @@ export interface ChargeResult {
 @Injectable()
 export class MockPaymentGateway {
   providerName(method: PaymentMethod): string {
-    return method === "WALLET" ? "MoMo" : "VNPay";
+    return method === 'WALLET' ? 'MoMo' : 'VNPay';
   }
 
   async charge(req: ChargeRequest): Promise<ChargeResult> {
@@ -32,13 +32,13 @@ export class MockPaymentGateway {
       return {
         ok: false,
         provider,
-        failureReason: "Giao dịch bị từ chối hoặc hết thời gian chờ",
+        failureReason: 'Giao dịch bị từ chối hoặc hết thời gian chờ',
       };
     }
     return {
       ok: true,
       provider,
-      transactionId: `BL${req.orderId}${provider.toUpperCase()}`,
+      transactionId: `BL-${req.orderId}-${randomUUID()}`,
     };
   }
 }
