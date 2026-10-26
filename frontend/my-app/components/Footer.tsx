@@ -28,9 +28,23 @@ export default function Footer() {
           {/* Cột 2: Khám phá (chỉ giữ các trang đã có) */}
           <div className="flex flex-col">
             <h3 className="font-bold text-[16px]">Khám phá BrewLite</h3>
+<<<<<<< HEAD
             <Link href="/thuc-don" className="hover:text-white transition-colors">Thực đơn</Link>
             <Link href="/gio-hang" className="hover:text-white transition-colors">Giỏ hàng</Link>
             <Link href="/chi-tiet-don-hang" className="hover:text-white transition-colors">Lịch sử đơn hàng</Link>
+=======
+            <Link href="/menu" className="hover:text-white transition-colors">
+  Thực đơn
+</Link>
+
+<Link href="/cart" className="hover:text-white transition-colors">
+  Giỏ hàng
+</Link>
+
+<Link href="/orders" className="hover:text-white transition-colors">
+  Lịch sử đơn hàng
+</Link>
+>>>>>>> 42b4564ad28e7c14134ecbfe41ece011e71e6ade
           </div>
 
           {/* Cột 3: Hỗ trợ khách hàng (chưa có trang nên để dạng chữ, không gắn link) */}

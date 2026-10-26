@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { PaymentMethod } from '@prisma/client';
 
 export interface ChargeRequest {
@@ -37,7 +38,7 @@ export class MockPaymentGateway {
     return {
       ok: true,
       provider,
-      transactionId: `BL${req.orderId}${provider.toUpperCase()}`,
+      transactionId: `BL-${req.orderId}-${randomUUID()}`,
     };
   }
 }

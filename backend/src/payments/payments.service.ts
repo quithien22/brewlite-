@@ -59,6 +59,20 @@ export class PaymentsService {
           );
         }
 
+        // Giao dịch demo bị treo sau khi backend bị tắt: đánh dấu FAILED.
+        // Kết quả trả về muộn sẽ không được phép cập nhật đơn nữa.
+        await tx.payment.updateMany({
+          where: {
+            orderId: order.id,
+            status: 'PENDING',
+            createdAt: { lte: new Date(Date.now() - PENDING_TTL_MS) },
+          },
+          data: {
+            status: 'FAILED',
+            failureReason: 'Giao dịch demo đã quá thời gian chờ',
+          },
+        });
+
         const inflight = await tx.payment.count({
           where: {
             orderId: order.id,
@@ -131,30 +145,36 @@ export class PaymentsService {
       };
     }
 
-    // ---- Bước 3: ghi nhận kết quả + chuyển trạng thái đơn ----
+    // ---- Bước 3: lưu kết quả atomically + kiểm tra tình trạng payment ----
     await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({
+        where: { id: paymentId },
+      });
+      // Đã hết hạn/được xử lý bởi tiến trình khác. Không ghi đè giao dịch cũ.
+      if (!payment || payment.status !== 'PENDING') return;
+
       const order = await tx.order.findUniqueOrThrow({
         where: { id: dto.orderId },
       });
 
-      // Đơn đã bị hủy trong lúc chờ cổng thanh toán
       if (order.status !== 'PENDING') {
-        await tx.payment.update({
-          where: { id: paymentId },
+        // Đây chỉ là mock, trạng thái REFUNDED KHÔNG đồng nghĩa đã hoàn tiền thật.
+        await tx.payment.updateMany({
+          where: { id: paymentId, status: 'PENDING' },
           data: {
-            status: result.ok ? 'REFUNDED' : 'FAILED',
+            status: result.ok && order.status === 'CANCELLED' ? 'REFUNDED' : 'FAILED',
             provider: result.provider,
             transactionId: result.transactionId,
             failureReason: result.ok
-              ? 'Đơn đã bị hủy, tiền được hoàn lại'
+              ? 'Đơn đã thay đổi trạng thái khi xử lý thanh toán mock'
               : result.failureReason,
           },
         });
         return;
       }
 
-      await tx.payment.update({
-        where: { id: paymentId },
+      const saved = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
         data: {
           status: result.ok ? 'SUCCESS' : 'FAILED',
           provider: result.provider,
@@ -162,10 +182,11 @@ export class PaymentsService {
           failureReason: result.failureReason,
         },
       });
+      if (saved.count !== 1) return;
       await transitionOrder(tx, order, result.ok ? 'PAID' : 'PAYMENT_FAILED');
 
       if (result.ok) {
-        // Cộng điểm đúng 1 lần cho mỗi đơn
+        // Cộng điểm đúng 1 lần, bên trong cùng transaction.
         const flag = await tx.order.updateMany({
           where: { id: order.id, pointsAwarded: false },
           data: { pointsAwarded: true },
@@ -185,9 +206,19 @@ export class PaymentsService {
   private async replay(
     userId: number,
     dto: CreatePaymentDto,
-    existing: { id: number; orderId: number; status: string; order: { userId: number } },
+    existing: {
+      id: number;
+      orderId: number;
+      method: string;
+      status: string;
+      order: { userId: number };
+    },
   ) {
-    if (existing.order.userId !== userId || existing.orderId !== dto.orderId) {
+    if (
+      existing.order.userId !== userId ||
+      existing.orderId !== dto.orderId ||
+      existing.method !== dto.method
+    ) {
       throw new UnprocessableEntityException(
         'Idempotency-Key đã được dùng cho một yêu cầu thanh toán khác',
       );

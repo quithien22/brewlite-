@@ -8,7 +8,7 @@ export class CreatePaymentDto {
   @IsIn(['WALLET', 'CARD'], { message: 'Phương thức thanh toán không hợp lệ' })
   method: 'WALLET' | 'CARD';
 
-  /** Chỉ dùng để demo: ép cổng thanh toán giả lập trả lỗi. */
+  /** Chỉ dùng để demo: ép cổng thanh toán giả lập trả lỗi */
   @IsOptional()
   @IsBoolean()
   simulateFailure?: boolean;

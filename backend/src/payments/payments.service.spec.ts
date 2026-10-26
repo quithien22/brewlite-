@@ -35,8 +35,19 @@ function makeFakePrisma() {
       },
       count: async ({ where }: AnyRecord) =>
         payments.filter(
-          (p) => p.orderId === where.orderId && p.status === where.status,
+          (p) => p.orderId === where.orderId && p.status === where.status &&
+            (!where.createdAt?.gt || p.createdAt > where.createdAt.gt),
         ).length,
+      updateMany: async ({ where, data }: AnyRecord) => {
+        const selected = payments.filter((p) =>
+          (where.id === undefined || p.id === where.id) &&
+          (where.orderId === undefined || p.orderId === where.orderId) &&
+          (where.status === undefined || p.status === where.status) &&
+          (!where.createdAt?.lte || p.createdAt <= where.createdAt.lte),
+        );
+        selected.forEach((payment) => Object.assign(payment, data));
+        return { count: selected.length };
+      },
       create: async ({ data }: AnyRecord) => {
         await tick();
         if (payments.some((p) => p.idempotencyKey === data.idempotencyKey)) {
@@ -97,11 +108,13 @@ function makeFakePrisma() {
   return { fake, order, user, payments };
 }
 
-function makeService(opts: { gatewayOk?: boolean } = {}) {
+function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } = {}) {
   const { fake, order, user, payments } = makeFakePrisma();
+  let chargeIndex = 0;
   const charge = jest.fn(async () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    return opts.gatewayOk === false
+    const ok = opts.gatewaySequence?.[chargeIndex++] ?? (opts.gatewayOk !== false);
+    return !ok
       ? { ok: false, provider: 'MoMo', failureReason: 'Bị từ chối' }
       : { ok: true, provider: 'MoMo', transactionId: 'BL1MOMO' };
   });
@@ -195,5 +208,45 @@ describe('Thanh toán idempotent (Idempotency-Key)', () => {
     // Khách chủ động thử lại (key mới) → đơn quay về PENDING rồi gọi cổng lại
     await failing.service.pay(7, 'key-retry-0002', DTO);
     expect(failing.charge).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('Bảo vệ thanh toán giả lập', () => {
+  it('một Idempotency-Key không thể thay đổi phương thức thanh toán', async () => {
+    const { service, charge } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+    await expect(
+      service.pay(7, 'key-abc-12345', { ...DTO, method: 'CARD' }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(charge).toHaveBeenCalledTimes(1);
+  });
+
+  it('lỗi rồi thanh toán lại bằng key mới: chỉ cộng điểm một lần', async () => {
+    const { service, user, payments, order } = makeService({ gatewaySequence: [false, true] });
+    const first = await service.pay(7, 'key-fail-0001', DTO);
+    expect(first.success).toBe(false);
+    expect(order.status).toBe('PAYMENT_FAILED');
+    expect(user.loyaltyPoints).toBe(0);
+
+    const next = await service.pay(7, 'key-retry-0002', DTO);
+    expect(next.success).toBe(true);
+    expect(order.status).toBe('PAID');
+    expect(user.loyaltyPoints).toBe(8);
+    expect(payments).toHaveLength(2);
+  });
+
+  it('giao dịch PENDING quá hạn không được dùng kết quả đến muộn', async () => {
+    const { service, payments, order } = makeService();
+    payments.push({
+      id: 123, orderId: 1, idempotencyKey: 'old-transaction-key',
+      amount: 85000, method: 'WALLET', provider: 'MoMo',
+      status: 'PENDING', createdAt: new Date(Date.now() - 5 * 60_000),
+    });
+
+    await service.pay(7, 'key-new-0001', DTO);
+    expect(payments[0].status).toBe('FAILED');
+    expect(order.status).toBe('PAID');
+    expect(payments[1].status).toBe('SUCCESS');
   });
 });
