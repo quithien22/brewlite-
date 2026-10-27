@@ -1,3 +1,4 @@
+// Backend: Orders history & Home products logic
 import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { ListProductsQuery } from './dto/list-products.query';
 import { ProductsService } from './products.service';
