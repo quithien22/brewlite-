@@ -5,8 +5,8 @@ export default function Footer() {
   return (
     <div className="w-full bg-[#2B2118] flex justify-center font-sans">
       
-      {/* Container giới hạn chiều rộng 1440px và padding theo thiết kế (px-20 py-12) */}
-      <footer className="w-[1440px] px-[80px] py-[48px] flex flex-col gap-8">
+      {/* Container giới hạn chiều rộng tối đa 1440px, co lại theo màn hình nhỏ */}
+      <footer className="w-full max-w-[1440px] px-6 py-12 md:px-[80px] flex flex-col gap-8">
         
         {/* Phần Logo BrewLite */}
         <div>
@@ -16,7 +16,7 @@ export default function Footer() {
         </div>
 
         {/* Phần Nội dung chính (chia 3 cột) */}
-        <div className="flex justify-between items-start text-[#F5EBDD] text-[13px] leading-[190%] font-['Inter'] font-normal border-b border-[#F5EBDD]/20 pb-8">
+        <div className="flex flex-col gap-8 md:flex-row md:justify-between items-start text-[#F5EBDD] text-[13px] leading-[190%] font-['Inter'] font-normal border-b border-[#F5EBDD]/20 pb-8">
           
           {/* Cột 1: Thông tin liên hệ */}
           <div className="flex flex-col">
@@ -25,26 +25,12 @@ export default function Footer() {
             <p>Hotline: 1900 1042 · hello@brewlite.vn</p>
           </div>
 
-          {/* Cột 2: Khám phá (chỉ giữ các trang đã có) */}
+          {/* Cột 2: Khám phá */}
           <div className="flex flex-col">
             <h3 className="font-bold text-[16px]">Khám phá BrewLite</h3>
-<<<<<<< HEAD
-            <Link href="/thuc-don" className="hover:text-white transition-colors">Thực đơn</Link>
-            <Link href="/gio-hang" className="hover:text-white transition-colors">Giỏ hàng</Link>
-            <Link href="/chi-tiet-don-hang" className="hover:text-white transition-colors">Lịch sử đơn hàng</Link>
-=======
-            <Link href="/menu" className="hover:text-white transition-colors">
-  Thực đơn
-</Link>
-
-<Link href="/cart" className="hover:text-white transition-colors">
-  Giỏ hàng
-</Link>
-
-<Link href="/orders" className="hover:text-white transition-colors">
-  Lịch sử đơn hàng
-</Link>
->>>>>>> 42b4564ad28e7c14134ecbfe41ece011e71e6ade
+            <Link href="/menu" className="hover:text-white transition-colors">Thực đơn</Link>
+            <Link href="/cart" className="hover:text-white transition-colors">Giỏ hàng</Link>
+            <Link href="/orders" className="hover:text-white transition-colors">Lịch sử đơn hàng</Link>
           </div>
 
           {/* Cột 3: Hỗ trợ khách hàng (chưa có trang nên để dạng chữ, không gắn link) */}

@@ -78,7 +78,7 @@ export default function ForgotPassword() {
             </div>
 
             <button disabled={busy} className={`${btnPrimary} mt-2 w-full py-4`}>
-              {busy ? "Đang gửi..." : "Gửi liên kết đặt lại"}
+              {busy ? "Đang gửi...." : "Gửi liên kết đặt lại"}
             </button>
 
             <div className="mt-2 w-full text-center">
