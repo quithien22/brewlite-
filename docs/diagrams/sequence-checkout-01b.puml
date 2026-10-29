@@ -1,0 +1,46 @@
+@startuml sequence-checkout-01b
+title Sequence-01b – Thanh toán đơn hàng (POST /payments)
+skinparam shadowing false
+skinparam defaultFontName "Liberation Sans"
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 20
+
+actor "Khách hàng" as C
+participant "Next.js UI" as UI
+participant "NestJS API" as API
+database "PostgreSQL" as DB
+participant "Cổng thanh toán" as PG
+
+C -> UI : Chọn Ví / Thẻ, nhấn "Thanh toán"
+UI -> UI : Sinh Idempotency-Key (UUID)\ncho lần thanh toán này
+UI -> API : POST /payments\n(JWT, Idempotency-Key, orderId, method)
+API -> API : Xác thực JWT, validate\n(method, độ dài key 8-100)
+
+alt JWT sai hoặc dữ liệu không hợp lệ
+  API --> UI : 401 / 400
+  UI --> C : Hiển thị lỗi
+else Hợp lệ
+  API -> DB : Tìm Payment theo Idempotency-Key
+  alt Key đã tồn tại (client gửi lại)
+    DB --> API : Payment đã lưu
+    API --> UI : 200 kết quả cũ (replayed = true), không gọi cổng
+    UI --> C : Hiển thị kết quả đã có
+  else Key mới
+    API -> DB : Kiểm tra đơn của khách,\ntrạng thái PENDING / PAYMENT_FAILED
+    API -> DB : INSERT Payment PROCESSING (unique key)
+    API -> PG : charge(orderId, amount từ CSDL, method, key)
+    alt Thanh toán thành công
+      PG --> API : SUCCESS + transactionId
+      API -> DB : BEGIN; Payment SUCCESS; Order PAID; log;\nLoyaltyTransaction EARN; COMMIT
+      API --> UI : 200 success = true (orderId, transactionId)
+      UI --> C : Xóa giỏ, hiển thị màn hình thành công
+    else Thanh toán thất bại / quá thời gian
+      PG --> API : FAILED + lý do
+      API -> DB : BEGIN; Payment FAILED; Order PAYMENT_FAILED; log; COMMIT
+      API --> UI : 200 success = false (failureReason)
+      UI --> C : Hiển thị lỗi, nút "Thử lại" (key mới) / "Hủy đơn"
+    end
+  end
+end
+@enduml

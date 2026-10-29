@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -8,6 +9,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
+    // Cố định root là apps/web (thư mục gốc repo có package-lock.json thừa)
+    root: path.resolve(__dirname),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

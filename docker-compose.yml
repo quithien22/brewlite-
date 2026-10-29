@@ -2,45 +2,46 @@
 #   Frontend : http://localhost:3000
 #   Backend  : http://localhost:4000
 #   Postgres : localhost:5432 (brewlite / brewlite)
+# Có thể ghi đè các biến bên dưới bằng file .env ở thư mục gốc (xem .env.example)
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: brewlite
-      POSTGRES_PASSWORD: brewlite
-      POSTGRES_DB: brewlite
+      POSTGRES_USER: ${POSTGRES_USER:-brewlite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brewlite}
+      POSTGRES_DB: ${POSTGRES_DB:-brewlite}
     ports:
       - "5432:5432"
     volumes:
       - brewlite-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U brewlite -d brewlite"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brewlite} -d ${POSTGRES_DB:-brewlite}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   backend:
-    build: ./backend
+    build: ./apps/api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://brewlite:brewlite@db:5432/brewlite?schema=public
-      JWT_SECRET: doi-thanh-chuoi-bi-mat-dai-va-ngau-nhien
-      JWT_EXPIRES_IN: 7d
+      DATABASE_URL: postgresql://${POSTGRES_USER:-brewlite}:${POSTGRES_PASSWORD:-brewlite}@db:5432/${POSTGRES_DB:-brewlite}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-doi-thanh-chuoi-bi-mat-dai-va-ngau-nhien}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: "4000"
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     ports:
       - "4000:4000"
 
   frontend:
     build:
-      context: ./frontend/my-app
+      context: ./apps/web
       args:
         # Trình duyệt gọi trực tiếp backend nên dùng địa chỉ localhost
-        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     restart: unless-stopped
     depends_on:
       - backend

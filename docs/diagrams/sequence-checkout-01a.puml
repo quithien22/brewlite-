@@ -1,0 +1,45 @@
+@startuml sequence-checkout-01a
+title Sequence-01a – Tạo đơn hàng (POST /orders)
+skinparam shadowing false
+skinparam defaultFontName "Liberation Sans"
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+actor "Khách hàng" as C
+participant "Next.js UI" as UI
+participant "NestJS API" as API
+database "PostgreSQL" as DB
+
+C -> UI : Nhấn "Đặt hàng" từ giỏ hàng
+UI -> UI : Kiểm tra có JWT trong phiên
+opt Chưa đăng nhập
+  UI --> C : Chuyển sang trang đăng nhập (UC-02)
+end
+
+C -> UI : Xem lại đơn, nhập mã, điểm, ghi chú, xác nhận
+UI -> API : POST /orders\n(Bearer JWT, items, couponCode, pointsToUse, note)
+API -> API : Xác thực JWT, validate DTO (whitelist)
+
+alt JWT sai / hết hạn hoặc dữ liệu không hợp lệ
+  API --> UI : 401 Unauthorized / 400 Bad Request
+  UI --> C : Hiển thị lỗi (tiếng Việt)
+else Hợp lệ
+  API -> DB : BEGIN transaction
+  API -> DB : Đọc sản phẩm, topping, tính lại giá,\nkiểm tra mã, điểm
+  DB --> API : Giá, tồn kho, mã, điểm
+  alt Thiếu hàng hoặc mã / điểm không hợp lệ
+    API -> DB : ROLLBACK
+    API --> UI : 409 Conflict / 422 Unprocessable
+    UI --> C : Báo hết hàng / mã không hợp lệ, quay lại giỏ
+  else Đủ điều kiện
+    API -> DB : UPDATE stock = stock - qty WHERE stock >= qty
+    API -> DB : INSERT Order PENDING, OrderItem, log;\nusedCount + 1; LoyaltyTransaction REDEEM
+    API -> DB : COMMIT
+    DB --> API : OK
+    API --> UI : 201 Created (orderId, subtotal, discount, total)
+    UI --> C : Hiển thị trang thanh toán (tổng tiền)
+  end
+end
+@enduml
