@@ -1,3 +1,4 @@
+// Backend: Orders history & Home products logic
 import { Injectable, NotFoundException } from '@nestjs/common';
 /**
  * Interface cấu trúc dữ liệu trả về cho Frontend (khớp với ProductDetail)

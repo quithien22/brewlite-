@@ -1,3 +1,4 @@
+// Developed by Loc - Home & Orders module
 import type { Metadata } from "next";
 import OrdersView from "@/components/views/OrdersView";
 

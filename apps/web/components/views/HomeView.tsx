@@ -1,3 +1,4 @@
+// Developed by Loc - Home & Orders module
 import Link from "next/link";
 import FeaturedProducts from "@/components/product/FeaturedProducts";
 import { btnOutline, btnPrimary, container } from "@/components/ui/classes";
