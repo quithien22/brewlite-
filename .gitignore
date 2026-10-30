@@ -1,5 +1,3 @@
-# Thư mục tạm chứa file cũ đã gỡ khỏi dự án (xóa được)
-/_old/
 
 # dependencies / env ở thư mục gốc
 node_modules/
