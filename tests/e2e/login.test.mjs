@@ -8,7 +8,7 @@ const API = process.env.API_URL ?? 'http://localhost:4000';
 
 // Tài khoản có sẵn trong apps/api/prisma/seed.ts
 const DEMO = { email: 'demo@brewlite.vn', password: 'Demo1234' };
-const STAFF = { email: 'staff@brewlite.vn', password: 'Staff1234' };
+ 
 const BAD_CREDENTIALS = 'Email hoặc mật khẩu không đúng';
 
 async function login(body, { raw = false } = {}) {
