@@ -51,5 +51,6 @@ jobs:
           docker compose logs backend
           exit 1
       - run: node tests/e2e/smoke.mjs
+      - run: node --test tests/e2e/login.test.mjs
       - if: failure()
         run: docker compose logs

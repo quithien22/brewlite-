@@ -12,3 +12,11 @@ docker compose up --build -d        # hoặc chạy API + DB thủ công
 node tests/e2e/smoke.mjs            # cần Node 18+
 # API ở địa chỉ khác:  API_URL=http://localhost:4000 node tests/e2e/smoke.mjs
 ```
+
+## Test đầu vào đăng nhập
+
+Kiểm tra `POST /auth/login` với nhiều ca đầu vào (đúng, sai thông tin, thiếu trường, sai định dạng, sai kiểu dữ liệu, trường lạ, JSON hỏng) và token sau đăng nhập. Cần API + DB đã chạy và đã seed.
+
+```bash
+node --test tests/e2e/login.test.mjs
+```
