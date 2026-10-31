@@ -69,7 +69,7 @@ await step('POST /orders', async () => {
 });
 
 const key = randomUUID();
-let transactionId;
+let firstPayment;
 await step('POST /payments', async () => {
   const r = await call('/payments', {
     method: 'POST',
@@ -77,7 +77,8 @@ await step('POST /payments', async () => {
     headers: { 'Idempotency-Key': key },
   });
   assert.ok([200, 201].includes(r.status), JSON.stringify(r.data));
-  transactionId = JSON.stringify(r.data);
+  assert.equal(r.data.replayed, false, 'lần gọi đầu không được là replay');
+  firstPayment = r.data;
 });
 
 await step('POST /payments lặp cùng Idempotency-Key không trừ tiền lần 2', async () => {
@@ -87,7 +88,13 @@ await step('POST /payments lặp cùng Idempotency-Key không trừ tiền lần
     headers: { 'Idempotency-Key': key },
   });
   assert.ok([200, 201].includes(r.status), JSON.stringify(r.data));
-  assert.equal(JSON.stringify(r.data), transactionId, 'kết quả khác lần gọi đầu');
+  // API cố ý trả replayed:true ở lần gọi lại, nên tách riêng trường này ra
+  // rồi mới so sánh phần còn lại (payment, order) phải giống hệt lần đầu.
+  const { replayed: firstReplayed, ...first } = firstPayment;
+  const { replayed: secondReplayed, ...second } = r.data;
+  assert.equal(firstReplayed, false);
+  assert.equal(secondReplayed, true, 'lần gọi lại phải được đánh dấu replayed:true');
+  assert.deepEqual(second, first, 'kết quả khác lần gọi đầu');
 });
 
 await step('GET /orders/:id (đã thanh toán)', async () => {

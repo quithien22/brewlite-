@@ -10,6 +10,7 @@ import { useAuthStore } from "@/store/auth";
 
 const PHONE_RE = /^(0|\+84)\d{9,10}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GMAIL_RE = /^[a-zA-Z0-9._%+-]+@gmail\.com$/; // khớp GMAIL_REGEX phía API
 
 function strength(pw: string) {
   const checks = [
@@ -49,6 +50,8 @@ export default function Register() {
   function validate(): string | null {
     if (name.trim().length < 2) return "Họ tên tối thiểu 2 ký tự";
     if (!EMAIL_RE.test(email.trim())) return "Email không hợp lệ";
+    if (!GMAIL_RE.test(email.trim().toLowerCase()))
+      return "Chỉ chấp nhận email Gmail (ví dụ: ten@gmail.com)";
     if (phone.trim() && !PHONE_RE.test(phone.trim()))
       return "Số điện thoại không hợp lệ";
     if (password.length < 8) return "Mật khẩu tối thiểu 8 ký tự";

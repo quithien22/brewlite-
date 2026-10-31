@@ -11,6 +11,9 @@ import {
 const normalizeEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
+/** Chỉ chấp nhận địa chỉ Gmail khi ĐĂNG KÝ (đăng nhập / quên mật khẩu không giới hạn để tài khoản demo @brewlite.vn vẫn đăng nhập được). */
+const GMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+
 export class RegisterDto {
   @IsString({ message: 'Họ tên không hợp lệ' })
   @MinLength(2, { message: 'Họ tên tối thiểu 2 ký tự' })
@@ -19,6 +22,9 @@ export class RegisterDto {
 
   @Transform(normalizeEmail)
   @IsEmail({}, { message: 'Email không hợp lệ' })
+  @Matches(GMAIL_REGEX, {
+    message: 'Chỉ chấp nhận email Gmail (ví dụ: ten@gmail.com)',
+  })
   email: string;
 
   @IsOptional()

@@ -65,7 +65,7 @@ export default function CheckoutPage() {
                     <ChevronDown className="absolute right-4 top-4 text-[#74665B]" size={20} />
                   </div>
                   <p className="mt-2 text-[13px] text-[#74665B]">
-                    28 Nguyễn Huệ, Bến Nghé, TP. Hồ Chí Minh · Mở cửa 07:00 – 22:00
+                     Mở cửa 07:00 – 22:00
                   </p>
                 </div>
 
