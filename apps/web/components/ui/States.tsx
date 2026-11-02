@@ -14,7 +14,7 @@ export function EmptyState({
   action?: string;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-line bg-white px-6 py-14 text-center">
+    <div className="flex flex-col items-center rounded-2xl border border-line bg-white px-5 py-10 text-center sm:px-6 sm:py-14">
       <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-cream text-brand">
         <svg
           width="28"
@@ -31,7 +31,7 @@ export function EmptyState({
           <path d="M8 3v2M11 3v2M14 3v2" />
         </svg>
       </div>
-      <h2 className="text-2xl font-bold text-ink">{title}</h2>
+      <h2 className="text-xl font-bold text-ink sm:text-2xl">{title}</h2>
       <p className="mt-2 max-w-md text-sm text-muted">{description}</p>
       {href && action && (
         <Link href={href} className={`${btnPrimary} mt-6`}>
@@ -52,7 +52,7 @@ export function ErrorState({
 }) {
   const offline = error.isNetwork;
   return (
-    <div className="rounded-2xl border border-line bg-white p-8 text-center">
+    <div className="rounded-2xl border border-line bg-white p-5 text-center sm:p-8">
       <span
         className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
           offline ? "bg-[#FFF3D6] text-[#8A5A00]" : "bg-[#FBE7E7] text-danger"
@@ -60,7 +60,7 @@ export function ErrorState({
       >
         {offline ? "Không có kết nối" : "Có lỗi xảy ra"}
       </span>
-      <h2 className="mt-4 text-2xl font-bold text-ink">
+      <h2 className="mt-4 text-xl font-bold text-ink sm:text-2xl">
         {offline ? "Đường truyền đang nghỉ một chút" : "Chúng mình gặp một chút trục trặc"}
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted">
@@ -68,7 +68,7 @@ export function ErrorState({
           ? "Kiểm tra Wi-Fi hoặc dữ liệu di động rồi thử lại. Giỏ hàng của bạn vẫn được lưu."
           : error.message}
       </p>
-      <div className="mt-6 flex justify-center gap-3">
+      <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
         {onRetry && (
           <button onClick={onRetry} className={btnPrimary}>
             {offline ? "Thử kết nối lại" : "Thử lại"}
@@ -84,7 +84,7 @@ export function ErrorState({
 
 export function Loading({ label = "Đang tải..." }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-24 text-muted">
+    <div className="flex items-center justify-center gap-3 py-16 text-muted sm:py-24">
       <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brand" />
       <span className="text-sm">{label}</span>
     </div>

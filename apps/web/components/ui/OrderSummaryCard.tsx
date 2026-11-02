@@ -19,10 +19,10 @@ export default function OrderSummaryCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-white p-6">
+    <div className="rounded-2xl border border-line bg-white p-4 sm:p-6">
       <h2 className="mb-4 text-lg font-bold text-ink">Tóm tắt đơn hàng</h2>
       <dl className="space-y-3 text-sm">
-        <div className="flex justify-between text-muted">
+        <div className="flex justify-between gap-4 text-muted">
           <dt>Tạm tính · {itemCount} sản phẩm</dt>
           <dd className="text-ink">{vnd(subtotal)}</dd>
         </div>

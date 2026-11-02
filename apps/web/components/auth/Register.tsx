@@ -88,10 +88,10 @@ export default function Register() {
   }
 
   return (
-    <div className="flex w-full justify-center px-6 py-10">
+    <div className="flex w-full justify-center px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex w-full max-w-[1280px] flex-col items-start gap-6 md:flex-row">
-        {/* Cột trái: hình ảnh & thông điệp */}
-        <div className="flex w-full flex-col gap-6 md:w-1/2">
+        {/* Cột trái: hình ảnh & thông điệp (ẩn trên mobile để form lên trước) */}
+        <div className="hidden w-full flex-col gap-6 md:flex md:w-1/2">
           <img
             src="https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=800&q=80"
             alt="Bàn cà phê"
@@ -110,8 +110,8 @@ export default function Register() {
 
         {/* Cột phải: form */}
         <div className="flex w-full flex-col md:w-1/2 md:px-16">
-          <h2 className="mb-1 text-[36px] font-bold leading-[150%] text-ink">Tạo tài khoản</h2>
-          <p className="mb-8 text-[16px] leading-[150%] text-muted">
+          <h2 className="mb-1 text-[28px] font-bold leading-[150%] text-ink sm:text-[36px]">Tạo tài khoản</h2>
+          <p className="mb-6 text-[15px] leading-[150%] text-muted sm:mb-8 sm:text-[16px]">
             Một phút đăng ký, nhiều ngày cà phê ngon.
           </p>
 
@@ -179,7 +179,7 @@ export default function Register() {
                 <button
                   type="button"
                   onClick={() => setShowPw((s) => !s)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted hover:text-brand"
+                  className="absolute right-1 top-1/2 flex min-h-[44px] -translate-y-1/2 items-center px-3 text-xs font-semibold text-muted hover:text-brand"
                 >
                   {showPw ? "Ẩn" : "Hiện"}
                 </button>
@@ -218,7 +218,7 @@ export default function Register() {
                 type="checkbox"
                 checked={agree}
                 onChange={(e) => setAgree(e.target.checked)}
-                className="mt-1 h-4 w-4 cursor-pointer accent-[#6F4E37]"
+                className="mt-1 h-5 w-5 cursor-pointer accent-[#6F4E37]"
               />
               Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật.
             </label>

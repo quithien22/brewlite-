@@ -107,7 +107,7 @@ export default function CheckoutView() {
 
   if (lines.length === 0) {
     return (
-      <div className={`${container} py-10`}>
+      <div className={`${container} py-6 sm:py-10`}>
         <EmptyState
           title="Chưa có gì để thanh toán"
           description="Giỏ hàng của bạn đang trống. Chọn đồ uống trước nhé."
@@ -212,23 +212,23 @@ export default function CheckoutView() {
   }
 
   return (
-    <div className={`${container} py-10`}>
-      <Link href="/cart" className="text-sm font-semibold text-muted hover:text-brand">
+    <div className={`${container} py-6 sm:py-10`}>
+      <Link href="/cart" className="inline-flex min-h-[40px] items-center text-sm font-semibold text-muted hover:text-brand">
         ← Quay lại giỏ hàng
       </Link>
-      <h1 className="mb-6 mt-3 text-[32px] font-bold text-ink">Thanh toán</h1>
+      <h1 className="mb-5 mt-1 text-2xl font-bold text-ink sm:mb-6 sm:mt-3 sm:text-[32px]">Thanh toán</h1>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[1fr_380px]">
-        <div className="flex flex-col gap-6">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
+        <div className="flex flex-col gap-4 sm:gap-6">
           <section className={card}>
             <h2 className="mb-4 text-lg font-bold text-ink">Đơn của bạn</h2>
             <ul className="divide-y divide-line">
               {lines.map((l) => (
-                <li key={l.key} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                <li key={l.key} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 sm:gap-4">
                   <ProductImage
                     src={l.imageUrl}
                     alt={l.name}
-                    className="h-14 w-14 shrink-0 rounded-lg"
+                    className="h-12 w-12 shrink-0 rounded-lg sm:h-14 sm:w-14"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-ink">
@@ -236,7 +236,7 @@ export default function CheckoutView() {
                     </p>
                     <p className="text-xs text-muted">{describeOptions(l)}</p>
                   </div>
-                  <p className="text-sm font-bold text-ink">{vnd(l.unitPrice * l.qty)}</p>
+                  <p className="shrink-0 text-sm font-bold text-ink">{vnd(l.unitPrice * l.qty)}</p>
                 </li>
               ))}
             </ul>
@@ -256,7 +256,7 @@ export default function CheckoutView() {
                 return (
                   <label
                     key={m.value}
-                    className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 transition ${
+                    className={`flex min-h-[56px] cursor-pointer items-center gap-3 rounded-xl border p-3 transition sm:gap-4 sm:p-4 ${
                       active ? "border-brand bg-cream" : "border-line hover:border-brand"
                     }`}
                   >
@@ -266,7 +266,7 @@ export default function CheckoutView() {
                       value={m.value}
                       checked={active}
                       onChange={() => setMethod(m.value)}
-                      className="h-4 w-4 accent-[#6F4E37]"
+                      className="h-5 w-5 accent-[#6F4E37]"
                     />
                     <span>
                       <span className="block font-bold text-ink">{m.title}</span>

@@ -32,7 +32,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
   if (!ready || (loading && !order)) return <Loading />;
   if (error && !order) {
     return (
-      <div className={`${container} py-10`}>
+      <div className={`${container} py-6 sm:py-10`}>
         <ErrorState error={error} onRetry={reload} />
       </div>
     );
@@ -42,20 +42,20 @@ export default function OrderSuccessView({ id }: { id: number }) {
   }
 
   return (
-    <div className={`${container} flex justify-center py-12`}>
-      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-8 text-center">
+    <div className={`${container} flex justify-center py-6 sm:py-12`}>
+      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-5 text-center sm:p-8">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#E6F3EA] text-ok">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h1 className="text-[28px] font-bold text-ink">Đặt hàng thành công</h1>
+        <h1 className="text-2xl font-bold text-ink sm:text-[28px]">Đặt hàng thành công</h1>
         <p className="mt-2 text-sm text-muted">
           Cảm ơn bạn! Chúng mình đã nhận được thanh toán và đang chuẩn bị đồ uống.
         </p>
 
-        <dl className="mt-6 divide-y divide-line rounded-xl bg-cream/60 px-5 text-left text-sm">
-          <div className="flex items-center justify-between py-3">
+        <dl className="mt-6 divide-y divide-line rounded-xl bg-cream/60 px-4 text-left text-sm sm:px-5">
+          <div className="flex items-center justify-between gap-4 py-3">
             <dt className="text-muted">Mã đơn</dt>
             <dd className="text-lg font-bold text-brand">{order.code}</dd>
           </div>
@@ -70,12 +70,12 @@ export default function OrderSuccessView({ id }: { id: number }) {
             <dd className="font-bold text-ink">{vnd(order.total)}</dd>
           </div>
           {order.payment && (
-            <div className="flex items-center justify-between py-3">
+            <div className="flex items-start justify-between gap-4 py-3">
               <dt className="text-muted">Phương thức</dt>
-              <dd className="font-semibold text-ink">
+              <dd className="text-right font-semibold text-ink">
                 {METHOD_LABEL[order.payment.method]}
                 {order.payment.transactionId && (
-                  <span className="ml-2 text-xs font-normal text-muted">
+                  <span className="ml-2 break-all text-xs font-normal text-muted">
                     {order.payment.transactionId}
                   </span>
                 )}
@@ -94,7 +94,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
           )}
         </dl>
 
-        <div className="mt-6 rounded-xl border border-line px-5 py-4 text-sm">
+        <div className="mt-6 rounded-xl border border-line px-4 py-4 text-sm sm:px-5">
           <p className="font-bold text-ink">Mời tới quầy lấy nước</p>
           <p className="mt-1 text-muted">
             {STORE.name} · {STORE.address}
@@ -102,7 +102,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
           <p className="mt-1 text-muted">Đọc mã đơn {order.code} với nhân viên quầy.</p>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
           <Link href={`/orders/${order.id}`} className={`${btnPrimary} flex-1`}>
             Xem chi tiết đơn
           </Link>

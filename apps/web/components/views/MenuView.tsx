@@ -40,10 +40,10 @@ export default function MenuView() {
   }
 
   return (
-    <div className={`${container} py-10`}>
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className={`${container} py-6 sm:py-10`}>
+      <div className="mb-5 flex flex-col gap-4 sm:mb-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-[32px] font-bold text-ink">Thực đơn</h1>
+          <h1 className="text-2xl font-bold text-ink sm:text-[32px]">Thực đơn</h1>
           <p className="mt-1 text-sm text-muted">
             Chọn món, chọn size và topping — thanh toán không tiền mặt chỉ trong vài chạm.
           </p>
@@ -58,14 +58,15 @@ export default function MenuView() {
         />
       </div>
 
-      <div className="mb-8 flex flex-wrap gap-2">
+      {/* Mobile: chip cuộn ngang một hàng (vuốt được); từ sm: tự xuống dòng */}
+      <div className="no-scrollbar -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-8 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         {["", ...categories].map((c) => {
           const active = c === category;
           return (
             <button
               key={c || "all"}
               onClick={() => pickCategory(c)}
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              className={`min-h-[40px] shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition ${
                 active
                   ? "border-brand bg-brand text-white"
                   : "border-line bg-white text-ink hover:border-brand"
@@ -89,7 +90,7 @@ export default function MenuView() {
           action="Xem tất cả"
         />
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3 xl:grid-cols-4">
           {visible.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}

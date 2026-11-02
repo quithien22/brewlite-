@@ -113,8 +113,8 @@ export default function CartView() {
 
   if (lines.length === 0) {
     return (
-      <div className={`${container} py-10`}>
-        <h1 className="mb-6 text-[32px] font-bold text-ink">Giỏ hàng</h1>
+      <div className={`${container} py-6 sm:py-10`}>
+        <h1 className="mb-6 text-2xl font-bold text-ink sm:text-[32px]">Giỏ hàng</h1>
         <EmptyState
           title="Giỏ hàng đang trống"
           description="Chọn một ly yêu thích từ thực đơn, chúng mình sẽ giữ nó ở đây cho bạn."
@@ -128,9 +128,9 @@ export default function CartView() {
   const checkoutHref = token ? "/checkout" : "/login?next=/checkout";
 
   return (
-    <div className={`${container} py-10`}>
-      <div className="mb-6 flex items-end justify-between">
-        <h1 className="text-[32px] font-bold text-ink">
+    <div className={`${container} py-6 sm:py-10`}>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1 sm:mb-6">
+        <h1 className="text-2xl font-bold text-ink sm:text-[32px]">
           Giỏ hàng{" "}
           <span className="text-lg font-medium text-muted">
             ({totals.itemCount} sản phẩm)
@@ -146,18 +146,18 @@ export default function CartView() {
         </button>
       </div>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[1fr_380px]">
-        <div className="flex flex-col gap-6">
-          <ul className="flex flex-col gap-4">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
+        <div className="flex flex-col gap-4 sm:gap-6">
+          <ul className="flex flex-col gap-3 sm:gap-4">
             {lines.map((l) => (
-              <li key={l.key} className={`${card} flex gap-4 p-4`}>
+              <li key={l.key} className={`${card} flex gap-3 p-3 sm:gap-4 sm:p-4`}>
                 <ProductImage
                   src={l.imageUrl}
                   alt={l.name}
-                  className="h-24 w-24 shrink-0 rounded-xl"
+                  className="h-20 w-20 shrink-0 rounded-xl sm:h-24 sm:w-24"
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="min-w-0">
                       <h3 className="font-bold text-ink">{l.name}</h3>
                       <p className="text-xs text-muted">{describeOptions(l)}</p>
@@ -171,7 +171,7 @@ export default function CartView() {
                         aria-label="Giảm số lượng"
                         disabled={l.qty <= 1}
                         onClick={() => setQty(l.key, l.qty - 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-line font-bold text-ink hover:border-brand disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-line font-bold text-ink hover:border-brand disabled:opacity-40"
                       >
                         −
                       </button>
@@ -180,14 +180,14 @@ export default function CartView() {
                         aria-label="Tăng số lượng"
                         disabled={l.qty >= MAX_QTY}
                         onClick={() => setQty(l.key, l.qty + 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-line font-bold text-ink hover:border-brand disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-line font-bold text-ink hover:border-brand disabled:opacity-40"
                       >
                         +
                       </button>
                     </div>
                     <button
                       onClick={() => remove(l.key)}
-                      className="text-sm font-semibold text-muted hover:text-danger"
+                      className="flex min-h-[40px] items-center px-2 text-sm font-semibold text-muted hover:text-danger"
                     >
                       Xóa
                     </button>
@@ -204,7 +204,7 @@ export default function CartView() {
           <div className={card}>
             <h2 className="mb-3 text-base font-bold text-ink">Mã giảm giá</h2>
             {coupon ? (
-              <div className="flex items-center justify-between rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm text-[#1E7A43]">
+              <div className="flex flex-col gap-2 rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm text-[#1E7A43] sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   <b>{coupon.code}</b> · {coupon.title} · −{vnd(totals.discount)}
                 </span>
@@ -219,7 +219,7 @@ export default function CartView() {
                 </button>
               </div>
             ) : (
-              <form onSubmit={applyCoupon} className="flex gap-3">
+              <form onSubmit={applyCoupon} className="flex flex-col gap-3 sm:flex-row">
                 <input
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -268,7 +268,7 @@ export default function CartView() {
                   Bạn có <b className="text-ink">{user.loyaltyPoints}</b> điểm · 1 điểm ={" "}
                   {vnd(POINT_VALUE)}
                 </p>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <input
                     type="number"
                     min={0}
@@ -280,7 +280,7 @@ export default function CartView() {
                       )
                     }
                     aria-label="Số điểm muốn dùng"
-                    className={`${input} max-w-[140px]`}
+                    className={`${input} max-w-[120px] sm:max-w-[140px]`}
                   />
                   <button
                     type="button"
@@ -293,7 +293,7 @@ export default function CartView() {
                     <button
                       type="button"
                       onClick={() => setPointsToUse(0)}
-                      className="text-sm font-semibold text-muted hover:text-danger"
+                      className="flex min-h-[44px] items-center px-2 text-sm font-semibold text-muted hover:text-danger"
                     >
                       Bỏ
                     </button>

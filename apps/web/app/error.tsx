@@ -11,8 +11,8 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   return (
-    <div className={`${container} flex justify-center py-20`}>
-      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-10 text-center">
+    <div className={`${container} flex justify-center py-10 sm:py-20`}>
+      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-6 text-center sm:p-10">
         <span className="inline-block rounded-full bg-[#FBE7E7] px-3 py-1 text-xs font-bold text-danger">
           Có lỗi xảy ra
         </span>

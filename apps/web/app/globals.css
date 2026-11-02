@@ -12,8 +12,31 @@
   --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
+/* Mobile-first nền tảng */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: #fbf8f4;
   color: #2b2118;
   font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Input >= 16px để iOS Safari không tự zoom khi focus */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* Thanh cuộn ngang (chip danh mục...) gọn hơn trên mobile */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

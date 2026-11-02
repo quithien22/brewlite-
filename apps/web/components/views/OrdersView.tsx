@@ -50,8 +50,8 @@ export default function OrdersView() {
   if (!ready) return <Loading />;
 
   return (
-    <div className={`${container} py-10`}>
-      <h1 className="text-[32px] font-bold text-ink">Lịch sử đơn hàng</h1>
+    <div className={`${container} py-6 sm:py-10`}>
+      <h1 className="text-2xl font-bold text-ink sm:text-[32px]">Lịch sử đơn hàng</h1>
       <p className="mb-6 mt-1 text-sm text-muted">
         Theo dõi trạng thái và xem lại các đơn bạn đã đặt.
       </p>
@@ -62,7 +62,7 @@ export default function OrdersView() {
           setSearch(searchInput.trim());
           setPage(1);
         }}
-        className={`${card} mb-6 grid gap-3 p-4 md:grid-cols-[1fr_200px_180px_auto]`}
+        className={`${card} mb-5 grid gap-3 p-3 sm:mb-6 sm:p-4 md:grid-cols-[1fr_200px_180px_auto]`}
       >
         <input
           value={searchInput}
@@ -123,24 +123,24 @@ export default function OrdersView() {
         )
       ) : (
         <>
-          <ul className={`flex flex-col gap-4 ${loading ? "opacity-60" : ""}`}>
+          <ul className={`flex flex-col gap-3 sm:gap-4 ${loading ? "opacity-60" : ""}`}>
             {data.items.map((o) => {
               const summary = o.items.map((i) => `${i.name} × ${i.qty}`).join(", ");
               return (
                 <li key={o.id}>
                   <Link
                     href={`/orders/${o.id}`}
-                    className={`${card} flex flex-col gap-3 p-5 transition hover:border-brand sm:flex-row sm:items-center sm:justify-between`}
+                    className={`${card} flex flex-col gap-3 p-4 transition hover:border-brand sm:flex-row sm:items-center sm:justify-between sm:p-5`}
                   >
                     <div className="min-w-0">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span className="text-lg font-bold text-ink">{o.code}</span>
                         <StatusBadge status={o.status} />
                       </div>
                       <p className="mt-1 truncate text-sm text-muted">{summary}</p>
                       <p className="mt-1 text-xs text-muted">{formatDateTime(o.createdAt)}</p>
                     </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center justify-between gap-6 border-t border-line pt-3 sm:justify-start sm:border-0 sm:pt-0">
                       <span className="text-lg font-bold text-brand">{vnd(o.total)}</span>
                       <span className="text-sm font-bold text-brand">Chi tiết →</span>
                     </div>
@@ -151,7 +151,7 @@ export default function OrdersView() {
           </ul>
 
           {data.totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-center gap-4">
+            <div className="mt-6 flex items-center justify-center gap-2 sm:mt-8 sm:gap-4">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}

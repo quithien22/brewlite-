@@ -32,19 +32,19 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="flex w-full justify-center px-6 py-20">
-      <div className="flex w-full max-w-[480px] flex-col rounded-2xl bg-white p-8">
+    <div className="flex w-full justify-center px-4 py-6 sm:px-6 sm:py-20">
+      <div className="flex w-full max-w-[480px] flex-col rounded-2xl bg-white p-2 sm:p-8">
         <div className="mb-4">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6F4E37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
           </svg>
         </div>
 
-        <h2 className="mb-2 text-[32px] font-bold text-ink">Quên mật khẩu?</h2>
-        <p className="mb-2 text-[16px] leading-[150%] text-muted">
+        <h2 className="mb-2 text-[28px] font-bold text-ink sm:text-[32px]">Quên mật khẩu?</h2>
+        <p className="mb-2 text-[15px] leading-[150%] text-muted sm:text-[16px]">
           Đừng lo, chúng mình sẽ giúp bạn quay lại.
         </p>
-        <p className="mb-8 text-[16px] leading-[150%] text-muted">
+        <p className="mb-6 text-[15px] leading-[150%] text-muted sm:mb-8 sm:text-[16px]">
           Nhập email đã đăng ký. Bạn sẽ nhận được liên kết để tạo mật khẩu mới.
         </p>
 
@@ -82,7 +82,7 @@ export default function ForgotPassword() {
             </button>
 
             <div className="mt-2 w-full text-center">
-              <Link href="/login" className="text-sm font-bold text-ink transition-colors hover:text-brand">
+              <Link href="/login" className="flex min-h-[44px] items-center justify-center text-sm font-bold text-ink transition-colors hover:text-brand">
                 Quay lại đăng nhập
               </Link>
             </div>

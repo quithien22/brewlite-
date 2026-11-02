@@ -42,9 +42,10 @@ export default function Login() {
   }
 
   return (
-    <div className="flex w-full justify-center px-6 py-10">
+    <div className="flex w-full justify-center px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex w-full max-w-[1280px] flex-col items-start gap-6 md:flex-row">
-        <div className="flex w-full flex-col gap-6 md:w-1/2">
+        {/* Ảnh + thông điệp: ẩn trên mobile để form lên trước */}
+        <div className="hidden w-full flex-col gap-6 md:flex md:w-1/2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&w=800&q=80"
@@ -59,9 +60,9 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="flex w-full flex-col pt-8 md:w-1/2 md:px-16">
-          <h2 className="mb-2 text-[32px] font-bold text-ink">Rất vui gặp lại bạn</h2>
-          <p className="mb-8 text-[15px] text-muted">
+        <div className="flex w-full flex-col md:w-1/2 md:px-16 md:pt-8">
+          <h2 className="mb-2 text-[28px] font-bold text-ink sm:text-[32px]">Rất vui gặp lại bạn</h2>
+          <p className="mb-6 text-[15px] text-muted sm:mb-8">
             Đăng nhập để tiếp tục với ly cà phê yêu thích.
           </p>
 
@@ -100,19 +101,19 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShow((s) => !s)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted hover:text-brand"
+                  className="absolute right-1 top-1/2 flex min-h-[44px] -translate-y-1/2 items-center px-3 text-xs font-semibold text-muted hover:text-brand"
                 >
                   {show ? "Ẩn" : "Hiện"}
                 </button>
               </div>
             </div>
 
-            <div className="mt-2 flex items-center justify-between">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-                <input type="checkbox" defaultChecked className="h-4 w-4 accent-[#6F4E37]" />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-ink">
+                <input type="checkbox" defaultChecked className="h-5 w-5 accent-[#6F4E37]" />
                 Ghi nhớ đăng nhập
               </label>
-              <Link href="/forgotpassword" className="text-sm font-bold text-brand hover:underline">
+              <Link href="/forgotpassword" className="flex min-h-[44px] items-center text-sm font-bold text-brand hover:underline">
                 Quên mật khẩu?
               </Link>
             </div>

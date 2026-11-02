@@ -32,7 +32,7 @@ function PromoCard({ promo }: { promo: Promotion }) {
   }
 
   return (
-    <article className="flex flex-col rounded-2xl border border-line bg-white p-6">
+    <article className="flex flex-col rounded-2xl border border-line bg-white p-5 sm:p-6">
       <span className="w-max rounded-full bg-cream px-3 py-1 text-xs font-bold text-brand">
         {benefit(promo)}
       </span>
@@ -53,10 +53,10 @@ function PromoCard({ promo }: { promo: Promotion }) {
       </dl>
 
       <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-dashed border-brand px-4 py-3">
-        <span className="font-mono text-lg font-bold tracking-wider text-brand">
+        <span className="break-all font-mono text-base font-bold tracking-wider text-brand sm:text-lg">
           {promo.code}
         </span>
-        <button onClick={copy} className="text-sm font-bold text-brand hover:underline">
+        <button onClick={copy} className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-brand hover:underline">
           {copied ? "Đã sao chép ✓" : "Sao chép"}
         </button>
       </div>
@@ -71,19 +71,19 @@ export default function PromotionsView() {
   );
 
   return (
-    <div className={`${container} py-10`}>
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className={`${container} py-6 sm:py-10`}>
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-[32px] font-bold text-ink">Khuyến mãi</h1>
+          <h1 className="text-2xl font-bold text-ink sm:text-[32px]">Khuyến mãi</h1>
           <p className="mt-1 text-sm text-muted">
             Sao chép mã và nhập ở bước giỏ hàng để nhận ưu đãi.
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/menu" className={btnPrimary}>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/menu" className={`${btnPrimary} flex-1 sm:flex-none`}>
             Đặt món ngay
           </Link>
-          <Link href="/cart" className={btnOutline}>
+          <Link href="/cart" className={`${btnOutline} flex-1 sm:flex-none`}>
             Xem giỏ hàng
           </Link>
         </div>
@@ -101,7 +101,7 @@ export default function PromotionsView() {
           action="Xem thực đơn"
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
           {data.map((p) => (
             <PromoCard key={p.code} promo={p} />
           ))}

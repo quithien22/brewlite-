@@ -29,7 +29,7 @@ brewlite/
 | `docs/` | Tài liệu: yêu cầu, sơ đồ, kiến trúc (ADR), ma trận truy vết, triển khai |
 | `docker-compose.yml` | Chạy cả 3: frontend, backend, DB |
 
-## Chạy bằng Docker (khuyến nghị để demo)
+## Chạy bằng Docker  
 
 ```bash
 docker compose up --build

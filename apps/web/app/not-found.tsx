@@ -3,8 +3,8 @@ import { btnOutline, btnPrimary, container } from "@/components/ui/classes";
 
 export default function NotFound() {
   return (
-    <div className={`${container} flex justify-center py-20`}>
-      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-10 text-center">
+    <div className={`${container} flex justify-center py-10 sm:py-20`}>
+      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-6 text-center sm:p-10">
         <p className="text-6xl font-bold text-brand">404</p>
         <h1 className="mt-4 text-2xl font-bold text-ink">Không tìm thấy trang này</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">

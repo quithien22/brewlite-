@@ -43,7 +43,7 @@ export default function OrderFailedView({ id }: { id: number }) {
   if (!ready || (loading && !order)) return <Loading />;
   if (error && !order) {
     return (
-      <div className={`${container} py-10`}>
+      <div className={`${container} py-6 sm:py-10`}>
         <ErrorState error={error} onRetry={reload} />
       </div>
     );
@@ -98,17 +98,17 @@ export default function OrderFailedView({ id }: { id: number }) {
   }
 
   return (
-    <div className={`${container} flex justify-center py-12`}>
-      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-8 text-center">
+    <div className={`${container} flex justify-center py-6 sm:py-12`}>
+      <div className="w-full max-w-[560px] rounded-2xl border border-line bg-white p-5 text-center sm:p-8">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FBE7E7] text-danger">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </div>
-        <h1 className="text-[28px] font-bold text-ink">Thanh toán chưa thành công</h1>
+        <h1 className="text-2xl font-bold text-ink sm:text-[28px]">Thanh toán chưa thành công</h1>
         <p className="mt-2 text-sm text-muted">{reason}</p>
 
-        <dl className="mt-6 divide-y divide-line rounded-xl bg-cream/60 px-5 text-left text-sm">
+        <dl className="mt-6 divide-y divide-line rounded-xl bg-cream/60 px-4 text-left text-sm sm:px-5">
           <div className="flex items-center justify-between py-3">
             <dt className="text-muted">Mã đơn</dt>
             <dd className="font-bold text-ink">{order.code}</dd>
@@ -128,7 +128,7 @@ export default function OrderFailedView({ id }: { id: number }) {
             {METHODS.map((m) => (
               <label
                 key={m.value}
-                className={`flex flex-1 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-semibold ${
+                className={`flex min-h-[48px] flex-1 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-semibold ${
                   method === m.value ? "border-brand bg-cream" : "border-line"
                 }`}
               >
@@ -137,7 +137,7 @@ export default function OrderFailedView({ id }: { id: number }) {
                   name="retry-method"
                   checked={method === m.value}
                   onChange={() => setMethod(m.value)}
-                  className="accent-[#6F4E37]"
+                  className="h-5 w-5 accent-[#6F4E37]"
                 />
                 {m.label}
               </label>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
@@ -11,6 +11,13 @@ const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin", "vietnamese"],
 });
+
+// Mobile-first: khai báo viewport rõ ràng, không khoá zoom (để đảm bảo khả năng truy cập)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#F5EBDD",
+};
 
 export const metadata: Metadata = {
   title: {
@@ -28,10 +35,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" className={`${inter.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col font-sans">
+      <body className="flex min-h-full flex-col overflow-x-hidden font-sans">
         <Providers>
           {/* Header đọc usePathname() nên cần Suspense với các route động (/menu/[id]...) */}
-          <Suspense fallback={<div className="h-[73px] border-b border-line bg-white" />}>
+          <Suspense fallback={<div className="h-16 border-b border-line bg-white md:h-[73px]" />}>
             <Header />
           </Suspense>
           <main className="flex-grow">{children}</main>

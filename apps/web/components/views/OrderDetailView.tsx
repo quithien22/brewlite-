@@ -28,36 +28,38 @@ function Progress({ status }: { status: OrderStatus }) {
   const current = FLOW.indexOf(status);
   if (current === -1) return null; // PAYMENT_FAILED / CANCELLED: chỉ hiện nhãn trạng thái.
   return (
-    <ol className="flex items-center">
-      {FLOW.map((s, i) => {
-        const done = i <= current;
-        return (
-          <li key={s} className="flex flex-1 items-center last:flex-none">
-            <div className="flex flex-col items-center gap-1">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                  done ? "bg-brand text-white" : "bg-line text-muted"
-                }`}
-              >
-                {done ? "✓" : i + 1}
-              </span>
-              <span
-                className={`text-center text-[11px] font-semibold ${
-                  i === current ? "text-brand" : "text-muted"
-                }`}
-              >
-                {STATUS_LABEL[s]}
-              </span>
-            </div>
-            {i < FLOW.length - 1 && (
-              <span
-                className={`mx-1 mb-5 h-0.5 flex-1 ${i < current ? "bg-brand" : "bg-line"}`}
-              />
-            )}
-          </li>
-        );
-      })}
-    </ol>
+    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+      <ol className="flex min-w-[400px] items-center">
+        {FLOW.map((s, i) => {
+          const done = i <= current;
+          return (
+            <li key={s} className="flex flex-1 items-center last:flex-none">
+              <div className="flex flex-col items-center gap-1">
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                    done ? "bg-brand text-white" : "bg-line text-muted"
+                  }`}
+                >
+                  {done ? "✓" : i + 1}
+                </span>
+                <span
+                  className={`text-center text-[11px] font-semibold ${
+                    i === current ? "text-brand" : "text-muted"
+                  }`}
+                >
+                  {STATUS_LABEL[s]}
+                </span>
+              </div>
+              {i < FLOW.length - 1 && (
+                <span
+                  className={`mx-1 mb-5 h-0.5 flex-1 ${i < current ? "bg-brand" : "bg-line"}`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -86,7 +88,7 @@ export default function OrderDetailView({ id }: { id: number }) {
 
   if (error && !order) {
     return (
-      <div className={`${container} py-10`}>
+      <div className={`${container} py-6 sm:py-10`}>
         {error.status === 404 ? (
           <EmptyState
             title="Không tìm thấy đơn hàng"
@@ -126,19 +128,19 @@ export default function OrderDetailView({ id }: { id: number }) {
   }
 
   return (
-    <div className={`${container} py-10`}>
-      <Link href="/orders" className="text-sm font-semibold text-muted hover:text-brand">
+    <div className={`${container} py-6 sm:py-10`}>
+      <Link href="/orders" className="inline-flex min-h-[40px] items-center text-sm font-semibold text-muted hover:text-brand">
         ← Lịch sử đơn hàng
       </Link>
 
-      <div className="mb-6 mt-3 flex flex-wrap items-center gap-3">
-        <h1 className="text-[32px] font-bold text-ink">Đơn {order.code}</h1>
+      <div className="mb-5 mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 sm:mb-6 sm:mt-3">
+        <h1 className="text-2xl font-bold text-ink sm:text-[32px]">Đơn {order.code}</h1>
         <StatusBadge status={order.status} />
         <span className="text-sm text-muted">{formatDateTime(order.createdAt)}</span>
       </div>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[1fr_380px]">
-        <div className="flex flex-col gap-6">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
+        <div className="flex flex-col gap-4 sm:gap-6">
           {FLOW.includes(order.status) && (
             <section className={card}>
               <Progress status={order.status} />
@@ -154,11 +156,11 @@ export default function OrderDetailView({ id }: { id: number }) {
             <h2 className="mb-4 text-lg font-bold text-ink">Sản phẩm</h2>
             <ul className="divide-y divide-line">
               {order.items.map((i) => (
-                <li key={i.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                <li key={i.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 sm:gap-4">
                   <ProductImage
                     src={i.imageUrl}
                     alt={i.name}
-                    className="h-16 w-16 shrink-0 rounded-lg"
+                    className="h-14 w-14 shrink-0 rounded-lg sm:h-16 sm:w-16"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-ink">
@@ -166,7 +168,7 @@ export default function OrderDetailView({ id }: { id: number }) {
                     </p>
                     <p className="text-xs text-muted">{describeOptions(i)}</p>
                   </div>
-                  <p className="text-sm font-bold text-ink">{vnd(i.lineTotal)}</p>
+                  <p className="shrink-0 text-sm font-bold text-ink">{vnd(i.lineTotal)}</p>
                 </li>
               ))}
             </ul>
@@ -199,9 +201,9 @@ export default function OrderDetailView({ id }: { id: number }) {
                   </dd>
                 </div>
                 {order.payment.transactionId && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-muted">Mã giao dịch</dt>
-                    <dd className="text-ink">{order.payment.transactionId}</dd>
+                    <dd className="break-all text-right text-ink">{order.payment.transactionId}</dd>
                   </div>
                 )}
                 {order.payment.failureReason && (

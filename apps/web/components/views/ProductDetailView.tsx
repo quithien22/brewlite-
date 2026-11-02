@@ -35,7 +35,7 @@ function Pill({ active, disabled = false, onClick, children }: PillProps) {
       disabled={disabled}
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`min-h-[44px] rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
         active
           ? "border-brand bg-brand text-white shadow-sm"
           : "border-line bg-white text-ink hover:border-brand"
@@ -159,32 +159,32 @@ function ProductForm({ product }: ProductFormProps) {
   }
 
   return (
-    <div className={`${container} py-10`}>
+    <div className={`${container} py-5 sm:py-10`}>
       {/* Nút điều hướng quay lại danh mục thực đơn */}
       <Link
         href="/menu"
-        className="inline-flex items-center text-sm font-semibold text-muted transition hover:text-brand"
+        className="inline-flex min-h-[40px] items-center text-sm font-semibold text-muted transition hover:text-brand"
       >
         ← Thực đơn
       </Link>
 
-      <div className="mt-6 grid gap-10 md:grid-cols-2">
+      <div className="mt-3 grid gap-6 sm:mt-6 md:grid-cols-2 md:gap-10">
         {/* Khung hiển thị ảnh sản phẩm */}
         <div className="overflow-hidden rounded-2xl border border-line bg-cream">
           <ProductImage
             src={product.imageUrl}
             alt={product.name}
-            className="h-[320px] w-full object-cover md:h-[480px]"
+            className="h-[260px] w-full object-cover sm:h-[360px] md:h-[480px]"
           />
         </div>
 
         {/* Khung cấu hình thông tin và tùy chọn */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5 sm:gap-6">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               {product.category}
             </span>
-            <h1 className="mt-1 text-[32px] font-bold leading-tight text-ink">
+            <h1 className="mt-1 text-2xl font-bold leading-tight text-ink sm:text-[32px]">
               {product.name}
             </h1>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
@@ -286,7 +286,7 @@ function ProductForm({ product }: ProductFormProps) {
           )}
 
           {/* Bộ điều khiển số lượng và tổng thành tiền */}
-          <div className="flex items-center justify-between border-t border-line pt-6">
+          <div className="flex items-center justify-between border-t border-line pt-5 sm:pt-6">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -296,7 +296,7 @@ function ProductForm({ product }: ProductFormProps) {
                   setQty((q) => Math.max(1, q - 1));
                   setAdded(false);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-lg font-bold text-ink hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-line text-lg font-bold text-ink hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
               >
                 −
               </button>
@@ -309,7 +309,7 @@ function ProductForm({ product }: ProductFormProps) {
                   setQty((q) => Math.min(maxQty, q + 1));
                   setAdded(false);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-lg font-bold text-ink hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-line text-lg font-bold text-ink hover:border-brand disabled:cursor-not-allowed disabled:opacity-40"
               >
                 +
               </button>
@@ -348,7 +348,7 @@ function ProductForm({ product }: ProductFormProps) {
             <div
               role="status"
               aria-live="polite"
-              className="flex items-center justify-between rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm text-[#1E7A43]"
+              className="flex items-center justify-between gap-2 rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm text-[#1E7A43]"
             >
               <span>
                 Đã thêm vào giỏ hàng.{" "}
