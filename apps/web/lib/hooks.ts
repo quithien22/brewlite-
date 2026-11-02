@@ -16,6 +16,8 @@ export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[]) {
 
   useEffect(() => {
     let off = false;
+    // Bật trạng thái "đang tải" ngay khi bắt đầu gọi API (đồng bộ với hệ thống bên ngoài là mạng)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState((s) => ({ ...s, loading: true, error: null }));
     fetcher()
       .then((data) => {

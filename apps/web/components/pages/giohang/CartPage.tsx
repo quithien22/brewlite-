@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCart } from '../context/CartContext';
+import { useCart, type CartItem } from '../context/CartContext';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -21,6 +21,9 @@ interface PromotionItem {
   description: string;
   minOrder: number;
 }
+
+// Giỏ hàng có thể kèm các trường tuỳ chọn mà CartItem chưa khai báo
+type CartLine = CartItem & { id?: number; sugar?: string; ice?: string };
 
 export default function CartPage() {
   const router = useRouter();
@@ -66,6 +69,8 @@ export default function CartPage() {
   }, []);
 
   // 2. Tự động kiểm tra tồn kho giỏ hàng với Backend mỗi khi items thay đổi
+  // Đồng bộ state với kết quả gọi API bên ngoài nên cho phép setState trong effect này
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (items.length === 0) {
       setItemValidationMap({});
@@ -78,7 +83,7 @@ export default function CartPage() {
       setIsValidating(true);
       try {
         const payload = {
-          items: items.map((item: any) => ({
+          items: (items as CartLine[]).map((item) => ({
             productId: Number(item.productId ?? item.id),
             qty: item.quantity,
             size: item.sizeName || 'S',
@@ -137,6 +142,7 @@ export default function CartPage() {
 
     validateCartWithBackend();
   }, [items]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 3. Xử lý áp dụng mã giảm giá qua API POST /cart/apply-coupon
   const handleApplyCoupon = async (codeToApply?: string) => {
@@ -236,7 +242,7 @@ export default function CartPage() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
-              {items.map((item: any) => {
+              {(items as CartLine[]).map((item) => {
                 const productId = Number(item.productId ?? item.id);
                 const validation = itemValidationMap[productId];
                 const hasStockError = validation && !validation.isValid;
@@ -262,7 +268,7 @@ export default function CartPage() {
                       {item.toppings && item.toppings.length > 0 && (
                         <p className="text-xs text-amber-900/80 mt-1">
                           <span className="font-semibold">Topping:</span>{' '}
-                          {item.toppings.map((t: any) => t.name).join(', ')}
+                          {item.toppings.map((t) => t.name).join(', ')}
                         </p>
                       )}
                       <span className="font-semibold text-amber-900 inline-block mt-1">

@@ -39,6 +39,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Đọc dữ liệu từ localStorage khi component mount
+  // localStorage chỉ đọc được ở client sau khi mount (đọc lúc render sẽ lệch HTML do server tạo)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
       const stored = localStorage.getItem('brewlite_cart');
@@ -50,6 +52,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
     setIsInitialized(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Tự động lưu vào localStorage mỗi khi items thay đổi
   useEffect(() => {

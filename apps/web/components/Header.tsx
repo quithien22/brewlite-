@@ -29,10 +29,12 @@ function AccountArea({ variant }: { variant: "dropdown" | "drawer" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Đóng menu khi chuyển trang
-  useEffect(() => {
+  // Đóng menu khi chuyển trang: điều chỉnh state ngay lúc render, không cần effect
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   // Đóng menu khi bấm ra ngoài hoặc nhấn Esc (chỉ cần cho dropdown)
   useEffect(() => {
@@ -198,10 +200,12 @@ export default function Header() {
   const totalCartCount = useCartStore((state) => cartCount(state.lines));
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Đóng menu mobile khi chuyển trang
-  useEffect(() => {
+  // Đóng menu mobile khi chuyển trang: điều chỉnh state ngay lúc render, không cần effect
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Esc đóng menu mobile
   useEffect(() => {
