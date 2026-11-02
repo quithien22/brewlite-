@@ -1,8 +1,15 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
+// Khi build trên GitHub Actions (GITHUB_PAGES=true) thì xuất web tĩnh ra apps/web/out
+const isPages = process.env.GITHUB_PAGES === "true";
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  ...(isPages && {
+    output: "export" as const,
+    basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
+    images: { unoptimized: true },
+  }),
   experimental: {
     agentFeedback: true,
   },
