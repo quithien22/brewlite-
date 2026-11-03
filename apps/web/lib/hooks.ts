@@ -47,7 +47,9 @@ export function useRequireAuth() {
 
   useEffect(() => {
     if (hydrated && !token) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      // Giữ cả ?id=... để sau khi đăng nhập quay lại đúng trang chi tiết
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      router.replace(`/login?next=${encodeURIComponent(pathname + search)}`);
     }
   }, [hydrated, token, pathname, router]);
 

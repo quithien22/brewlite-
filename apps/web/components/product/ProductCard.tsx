@@ -6,7 +6,7 @@ import type { Product } from "@/lib/types";
 export default function ProductCard({ product }: { product: Product }) {
   return (
     <Link
-      href={`/menu/${product.id}`}
+      href={`/menu/detail?id=${product.id}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white transition hover:shadow-md"
     >
       <div className="relative overflow-hidden">

@@ -9,12 +9,14 @@ const nextConfig: NextConfig = {
     output: "export" as const,
     basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
     images: { unoptimized: true },
+    trailingSlash: true,
   }),
   experimental: {
     agentFeedback: true,
   },
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Xuất tĩnh (GitHub Pages) không dùng Cache Components
+  cacheComponents: !isPages,
+  partialPrefetching: !isPages,
   turbopack: {
     // Cố định root là apps/web (thư mục gốc repo có package-lock.json thừa)
     root: path.resolve(__dirname),

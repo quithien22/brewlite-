@@ -1,36 +1,28 @@
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
+"use client";
+
+import { notFound, useSearchParams } from "next/navigation";
+import { Suspense, type ComponentType } from "react";
 import { Loading } from "./States";
 
-type RouteParams = Promise<{ id: string }>;
+type View = ComponentType<{ id: number }>;
 
-async function Resolved({
-  params,
-  children,
-}: {
-  params: RouteParams;
-  children: (id: number) => React.ReactNode;
-}) {
-  const { id } = await params;
-  const n = Number(id);
-  if (!Number.isInteger(n) || n < 1) notFound();
-  return <>{children(n)}</>;
+function Resolved({ View }: { View: View }) {
+  const raw = useSearchParams().get("id");
+  const n = Number(raw);
+  if (!raw || !Number.isInteger(n) || n < 1) notFound();
+  return <View id={n} />;
 }
 
 /**
- * Đọc `params.id` của route động. Với Cache Components, việc đọc params phải
- * nằm trong <Suspense> nên gom lại một chỗ cho các trang /menu/[id], /orders/[id]...
+ * Đọc `?id=` từ URL (vd. /menu/detail?id=5, /orders/detail?id=12) rồi render view.
+ * Dùng query string thay cho route động [id] để xuất được web tĩnh lên GitHub Pages:
+ * id là dữ liệu từ backend nên không thể biết trước lúc build.
+ * useSearchParams cần nằm trong <Suspense>.
  */
-export default function IdRoute({
-  params,
-  children,
-}: {
-  params: RouteParams;
-  children: (id: number) => React.ReactNode;
-}) {
+export default function IdRoute({ view }: { view: View }) {
   return (
     <Suspense fallback={<Loading />}>
-      <Resolved params={params}>{children}</Resolved>
+      <Resolved View={view} />
     </Suspense>
   );
 }

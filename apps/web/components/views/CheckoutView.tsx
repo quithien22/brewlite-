@@ -133,11 +133,11 @@ export default function CheckoutView() {
         order = await api.orders.get(pendingOrderId);
         if (order.status === 'PAID') {
           clear();
-          router.replace(`/orders/${order.id}/success`);
+          router.replace(`/orders/success?id=${order.id}`);
           return;
         }
         if (order.status === 'PAYMENT_FAILED') {
-          router.replace(`/orders/${order.id}/failed`);
+          router.replace(`/orders/failed?id=${order.id}`);
           return;
         }
         if (order.status === 'CANCELLED') {
@@ -155,7 +155,7 @@ export default function CheckoutView() {
           setPendingOrderId(order.id);
         } else if (order.status !== 'PENDING') {
           clear();
-          router.replace(`/orders/${order.id}`);
+          router.replace(`/orders/detail?id=${order.id}`);
           return;
         } else if (!matchesCart(order, lines, coupon?.code, totals.points, note)) {
           throw new Error(
@@ -191,10 +191,10 @@ export default function CheckoutView() {
       if (result.success) {
         clear();
         api.auth.me().then(setUser).catch(() => {});
-        router.replace(`/orders/${order.id}/success`);
+        router.replace(`/orders/success?id=${order.id}`);
       } else {
         // Trạng thái PAYMENT_FAILED: không xóa giỏ hàng
-        router.replace(`/orders/${order.id}/failed`);
+        router.replace(`/orders/failed?id=${order.id}`);
       }
     } catch (err) {
       setError(

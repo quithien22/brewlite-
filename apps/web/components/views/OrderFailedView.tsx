@@ -35,9 +35,9 @@ export default function OrderFailedView({ id }: { id: number }) {
   // Đơn đã thanh toán / đã xử lý thì không còn là màn hình "thất bại".
   useEffect(() => {
     if (!order) return;
-    if (order.status === "PAID") router.replace(`/orders/${order.id}/success`);
+    if (order.status === "PAID") router.replace(`/orders/success?id=${order.id}`);
     else if (order.status !== "PENDING" && order.status !== "PAYMENT_FAILED")
-      router.replace(`/orders/${order.id}`);
+      router.replace(`/orders/detail?id=${order.id}`);
   }, [order, router]);
 
   if (!ready || (loading && !order)) return <Loading />;
@@ -69,7 +69,7 @@ export default function OrderFailedView({ id }: { id: number }) {
         const cart = useCartStore.getState();
         if (cart.pendingOrderId === order.id) cart.clear();
         api.auth.me().then(setUser).catch(() => {});
-        router.replace(`/orders/${order.id}/success`);
+        router.replace(`/orders/success?id=${order.id}`);
         return;
       }
       setActionError(res.payment.failureReason ?? "Thanh toán chưa thành công");
