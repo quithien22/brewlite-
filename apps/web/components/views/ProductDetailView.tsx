@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { btnOutline, btnPrimary, container } from "@/components/ui/classes";
 import ProductImage from "@/components/ui/ProductImage";
@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { vnd } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { ProductDetail, SizeCode } from "@/lib/types";
+import { useAuthStore } from "@/store/auth";
 import { MAX_QTY, useCartStore } from "@/store/cart";
 
 // ============================================================================
@@ -79,6 +80,8 @@ interface ProductFormProps {
 function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
   const addLine = useCartStore((s) => s.addLine);
+  const token = useAuthStore((s) => s.token);
+  const pathname = usePathname();
 
   const { sizes, toppings, sugarLevels, iceLevels, defaultSugar, defaultIce } =
     product.options;
@@ -143,6 +146,12 @@ function ProductForm({ product }: ProductFormProps) {
    */
   function add() {
     if (isOutOfStock) return;
+
+    // Phải đăng nhập mới được thêm vào giỏ; đăng nhập xong quay lại đúng sản phẩm này.
+    if (!token) {
+      router.push(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
+      return;
+    }
 
     addLine({
       productId: product.id,
