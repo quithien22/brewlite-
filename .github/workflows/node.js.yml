@@ -10,22 +10,114 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  api:
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: apps/api
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
+        node-version: [20.x, 22.x]
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+      - run: npm test -- --passWithNoTests
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  # E2E: chạy API thật + PostgreSQL, rồi chạy các test trong tests/e2e.
+  # Các bước giống CMD trong apps/api/Dockerfile: db push -> seed -> node dist/main.
+  e2e:
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: brewlite
+          POSTGRES_PASSWORD: brewlite
+          POSTGRES_DB: brewlite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U brewlite -d brewlite"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://brewlite:brewlite@localhost:5432/brewlite?schema=public
+      JWT_SECRET: ci-secret-chi-dung-cho-test
+      JWT_EXPIRES_IN: 7d
+      PORT: "4000"
+      FRONTEND_URL: http://localhost:3000
+      API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Cài thư viện API
+        working-directory: apps/api
+        run: npm ci
+
+      - name: Tạo bảng, nạp dữ liệu mẫu và build API
+        working-directory: apps/api
+        run: |
+          npx prisma generate
+          npx prisma db push --skip-generate
+          npx prisma db seed
+          npm run build
+
+      - name: Chạy API ở chế độ nền
+        working-directory: apps/api
+        run: nohup node dist/main > "$GITHUB_WORKSPACE/api.log" 2>&1 &
+
+      - name: Chờ API sẵn sàng
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$API_URL/" > /dev/null; then
+              echo "API đã sẵn sàng"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API không khởi động được sau 60 giây"
+          cat "$GITHUB_WORKSPACE/api.log"
+          exit 1
+
+      - name: E2E smoke test
+        run: node tests/e2e/smoke.mjs
+
+      - name: E2E test đăng nhập
+        run: node --test tests/e2e/login.test.mjs
+
+      - name: In log API khi có lỗi
+        if: failure()
+        run: cat "$GITHUB_WORKSPACE/api.log"
