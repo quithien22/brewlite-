@@ -129,7 +129,7 @@ export default function OrdersView() {
               return (
                 <li key={o.id}>
                   <Link
-                    href={`/orders/${o.id}`}
+                    href={`/orders/detail?id=${o.id}`}
                     className={`${card} flex flex-col gap-3 p-4 transition hover:border-brand sm:flex-row sm:items-center sm:justify-between sm:p-5`}
                   >
                     <div className="min-w-0">

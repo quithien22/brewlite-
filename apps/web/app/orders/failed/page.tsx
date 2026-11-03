@@ -4,12 +4,6 @@ import OrderFailedView from "@/components/views/OrderFailedView";
 
 export const metadata: Metadata = { title: "Thanh toán thất bại" };
 
-export default function OrderFailedPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return (
-    <IdRoute params={params}>{(id) => <OrderFailedView id={id} />}</IdRoute>
-  );
+export default function OrderFailedPage() {
+  return <IdRoute view={OrderFailedView} />;
 }

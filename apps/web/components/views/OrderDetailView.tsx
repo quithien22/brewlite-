@@ -259,7 +259,7 @@ export default function OrderDetailView({ id }: { id: number }) {
             )}
             {canPayAgain && (
               <Link
-                href={`/orders/${order.id}/failed`}
+                href={`/orders/failed?id=${order.id}`}
                 className={`${btnPrimary} mt-5 w-full py-4`}
               >
                 Thanh toán đơn này

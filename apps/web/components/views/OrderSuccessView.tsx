@@ -23,9 +23,9 @@ export default function OrderSuccessView({ id }: { id: number }) {
   useEffect(() => {
     if (!order) return;
     if (order.status === "PENDING" || order.status === "PAYMENT_FAILED") {
-      router.replace(`/orders/${order.id}/failed`);
+      router.replace(`/orders/failed?id=${order.id}`);
     } else if (order.status === "CANCELLED") {
-      router.replace(`/orders/${order.id}`);
+      router.replace(`/orders/detail?id=${order.id}`);
     }
   }, [order, router]);
 
@@ -103,7 +103,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
         </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
-          <Link href={`/orders/${order.id}`} className={`${btnPrimary} flex-1`}>
+          <Link href={`/orders/detail?id=${order.id}`} className={`${btnPrimary} flex-1`}>
             Xem chi tiết đơn
           </Link>
           <Link href="/" className={`${btnOutline} flex-1`}>
