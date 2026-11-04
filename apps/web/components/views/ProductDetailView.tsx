@@ -100,6 +100,7 @@ function ProductForm({ product }: ProductFormProps) {
   const [toppingIds, setToppingIds] = useState<number[]>([]);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [needLogin, setNeedLogin] = useState(false);
 
   // --- TÍNH TOÁN GIÁ & SỐ LƯỢNG (MEMOIZED) ---
   // Sử dụng Set để kiểm tra topping được chọn nhanh hơn với độ phức tạp O(1)
@@ -144,13 +145,14 @@ function ProductForm({ product }: ProductFormProps) {
    * Đưa sản phẩm vào giỏ hàng Zustand
    * Lưu ý bảo mật: Backend vẫn bắt buộc phải tính toán lại giá trị thực tế dựa trên DB khi tạo đơn hàng.
    */
-  function add() {
-    if (isOutOfStock) return;
+  function add(): boolean {
+    if (isOutOfStock) return false;
 
-    // Phải đăng nhập mới được thêm vào giỏ; đăng nhập xong quay lại đúng sản phẩm này.
+    // Phải đăng nhập mới được thêm vào giỏ: hiện thông báo kèm liên kết đăng nhập.
     if (!token) {
-      router.push(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
-      return;
+      setAdded(false);
+      setNeedLogin(true);
+      return false;
     }
 
     addLine({
@@ -164,7 +166,9 @@ function ProductForm({ product }: ProductFormProps) {
       unitPrice,
       qty,
     });
+    setNeedLogin(false);
     setAdded(true);
+    return true;
   }
 
   return (
@@ -343,14 +347,39 @@ function ProductForm({ product }: ProductFormProps) {
               type="button"
               disabled={isOutOfStock}
               onClick={() => {
-                add();
-                router.push("/cart");
+                if (add()) router.push("/cart");
               }}
               className={`${btnOutline} flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
             >
               Mua ngay
             </button>
           </div>
+
+          {/* Thông báo khi chưa đăng nhập mà bấm thêm vào giỏ */}
+          {needLogin && (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2 rounded-lg bg-[#FDECEC] px-4 py-3 text-sm text-[#B42318]"
+            >
+              <span>
+                Bạn phải đăng nhập mới được thêm sản phẩm vào giỏ hàng.{" "}
+                <Link
+                  href={`/login?next=${encodeURIComponent(pathname + window.location.search)}`}
+                  className="font-bold underline hover:opacity-80"
+                >
+                  Đăng nhập
+                </Link>
+              </span>
+              <button
+                type="button"
+                aria-label="Đóng thông báo"
+                onClick={() => setNeedLogin(false)}
+                className="ml-2 font-bold hover:opacity-70"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Thông báo phản hồi trạng thái thêm giỏ hàng thành công */}
           {added && (
