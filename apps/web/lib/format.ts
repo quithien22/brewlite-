@@ -27,15 +27,19 @@ export function formatDateTime(iso: string | Date) {
   return `${formatDate(iso)} · ${formatTime(iso)}`;
 }
 
+/** Đơn PAID được xem là đã đặt thành công (trạng thái cuối trong MVP). */
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: "Chờ thanh toán",
   PAID: "Đã thanh toán",
-  PREPARING: "Đang pha chế",
-  READY: "Sẵn sàng",
-  COMPLETED: "Hoàn thành",
   PAYMENT_FAILED: "Thanh toán thất bại",
   CANCELLED: "Đã hủy",
 };
+
+export const PAYMENT_STATUS_LABEL = {
+  PROCESSING: "Đang xử lý",
+  SUCCESS: "Thành công",
+  FAILED: "Thất bại",
+} as const;
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = {
   WALLET: "MoMo",

@@ -1,47 +1,40 @@
-import { BadRequestException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import type { OrderStatus } from '@prisma/client';
 
 /**
- * Order State Machine (Task 10 – yêu cầu 1)
+ * Order State Machine (MVP, FR-25)
  *
- *  PENDING ──► PAID ──► PREPARING ──► READY ──► COMPLETED
- *     │          │
- *     │          └──► CANCELLED
+ *  PENDING ──► PAID                    (PAID là trạng thái cuối)
+ *     │
  *     ├──► PAYMENT_FAILED ──► PENDING (thử lại) / CANCELLED
  *     └──► CANCELLED
  *
- * COMPLETED và CANCELLED là trạng thái kết thúc.
+ * MVP không có trạng thái pha chế (PREPARING / READY / COMPLETED).
+ * PAID và CANCELLED là trạng thái kết thúc.
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   PENDING: ['PAID', 'PAYMENT_FAILED', 'CANCELLED'],
   PAYMENT_FAILED: ['PENDING', 'CANCELLED'],
-  PAID: ['PREPARING', 'CANCELLED'],
-  PREPARING: ['READY'],
-  READY: ['COMPLETED'],
-  COMPLETED: [],
+  PAID: [],
   CANCELLED: [],
 };
 
-export const TERMINAL_STATUSES: readonly OrderStatus[] = [
-  'COMPLETED',
-  'CANCELLED',
-];
+export const TERMINAL_STATUSES: readonly OrderStatus[] = ['PAID', 'CANCELLED'];
 
-/** Các trạng thái khách còn được phép hủy đơn. */
+/** Các trạng thái khách còn được phép hủy đơn (đơn PAID không hủy được). */
 export const CANCELLABLE_STATUSES: readonly OrderStatus[] = [
   'PENDING',
   'PAYMENT_FAILED',
-  'PAID',
 ];
 
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_TRANSITIONS[from].includes(to);
 }
 
-/** Ném lỗi 400 nếu chuyển trạng thái không hợp lệ. */
+/** Ném lỗi 409 nếu chuyển trạng thái không hợp lệ (AC-25.1). */
 export function assertTransition(from: OrderStatus, to: OrderStatus): void {
   if (!canTransition(from, to)) {
-    throw new BadRequestException(
+    throw new ConflictException(
       `Không thể chuyển trạng thái đơn hàng từ ${from} sang ${to}`,
     );
   }

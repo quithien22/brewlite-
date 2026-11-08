@@ -6,10 +6,9 @@ import { describe, it } from 'node:test';
 
 const API = process.env.API_URL ?? 'http://localhost:4000';
 
-// Tài khoản có sẵn trong apps/api/prisma/seed.ts
+// Tài khoản có sẵn trong apps/api/prisma/seed.ts (MVP chỉ có khách hàng)
 const DEMO = { email: 'demo@brewlite.vn', password: 'Demo1234' };
-const STAFF = { email: 'staff@brewlite.vn', password: 'Staff1234' };
- 
+
 const BAD_CREDENTIALS = 'Email hoặc mật khẩu không đúng';
 
 async function login(body, { raw = false } = {}) {
@@ -33,7 +32,7 @@ describe('Đăng nhập thành công (200)', () => {
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.ok(r.data.accessToken, 'thiếu accessToken');
     assert.equal(r.data.user.email, DEMO.email);
-    assert.equal(r.data.user.role, 'CUSTOMER');
+    assert.ok(!('role' in r.data.user), 'MVP không có vai trò (role)');
   });
 
   it('không lộ passwordHash trong phản hồi', async () => {
@@ -54,10 +53,9 @@ describe('Đăng nhập thành công (200)', () => {
     assert.equal(r.status, 200, JSON.stringify(r.data));
   });
 
-  it('tài khoản nhân viên có role STAFF', async () => {
-    const r = await login(STAFF);
-    assert.equal(r.status, 200, JSON.stringify(r.data));
-    assert.equal(r.data.user.role, 'STAFF');
+  it('tài khoản nhân viên không còn tồn tại (MVP chỉ có khách hàng)', async () => {
+    const r = await login({ email: 'staff@brewlite.vn', password: 'Staff1234' });
+    assert.equal(r.status, 401, JSON.stringify(r.data));
   });
 });
 
@@ -72,7 +70,6 @@ const SAI_THONG_TIN = [
   ['mật khẩu chỉ gồm khoảng trắng', { email: DEMO.email, password: '   ' }],
   ['mật khẩu dài đúng 72 ký tự (biên trên)', { email: DEMO.email, password: 'a'.repeat(72) }],
   ['mật khẩu là chuỗi SQL injection', { email: DEMO.email, password: "' OR '1'='1" }],
-  ['mật khẩu của tài khoản khác', { email: DEMO.email, password: STAFF.password }],
 ];
 
 describe('Sai thông tin đăng nhập (401)', () => {

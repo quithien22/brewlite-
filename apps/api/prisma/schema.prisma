@@ -7,17 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  CUSTOMER
-  STAFF
-}
+// MVP chỉ có vai trò khách hàng nên không có enum Role.
 
+/// MVP: PAID là trạng thái cuối. Không có trạng thái pha chế (PREPARING/READY/COMPLETED).
 enum OrderStatus {
   PENDING
   PAID
-  PREPARING
-  READY
-  COMPLETED
   PAYMENT_FAILED
   CANCELLED
 }
@@ -28,15 +23,20 @@ enum PaymentMethod {
 }
 
 enum PaymentStatus {
-  PENDING // đã "giữ chỗ" Idempotency-Key, đang chờ cổng thanh toán trả kết quả
+  PROCESSING // đã giữ chỗ Idempotency-Key, đang chờ cổng thanh toán (tối đa 2 phút)
   SUCCESS
   FAILED
-  REFUNDED
 }
 
 enum DiscountType {
   PERCENT
   FIXED
+}
+
+enum LoyaltyType {
+  EARN
+  REDEEM
+  REFUND
 }
 
 model User {
@@ -45,11 +45,11 @@ model User {
   email         String   @unique
   phone         String?
   passwordHash  String
-  role          Role     @default(CUSTOMER)
   loyaltyPoints Int      @default(0)
   createdAt     DateTime @default(now())
 
-  orders Order[]
+  orders              Order[]
+  loyaltyTransactions LoyaltyTransaction[]
 }
 
 model Product {
@@ -59,7 +59,7 @@ model Product {
   category    String
   price       Int // giá cơ bản (VND), size S
   imageUrl    String
-  stock       Int // tồn kho
+  stock       Int // tồn kho, luôn >= 0
   version     Int      @default(0) // optimistic locking
   isActive    Boolean  @default(true)
   isFeatured  Boolean  @default(false)
@@ -110,9 +110,10 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  items      OrderItem[]
-  payments   Payment[]
-  statusLogs OrderStatusLog[]
+  items               OrderItem[]
+  payments            Payment[]
+  statusLogs          OrderStatusLog[]
+  loyaltyTransactions LoyaltyTransaction[]
 
   @@index([userId, createdAt])
 }
@@ -128,7 +129,7 @@ model OrderItem {
   size        String
   sugar       String
   ice         String
-  toppings    Json // [{ id, name, price }]
+  toppings    Json // snapshot [{ id, name, price }]
   unitPrice   Int
   qty         Int
   lineTotal   Int
@@ -158,4 +159,19 @@ model OrderStatusLog {
   createdAt DateTime    @default(now())
 
   @@index([orderId])
+}
+
+/// Sổ điểm thưởng: mỗi đơn có tối đa một bút toán cho mỗi loại (EARN / REDEEM / REFUND).
+model LoyaltyTransaction {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id])
+  orderId   Int
+  order     Order       @relation(fields: [orderId], references: [id])
+  type      LoyaltyType
+  points    Int // luôn dương; chiều cộng/trừ do type quyết định
+  createdAt DateTime    @default(now())
+
+  @@unique([orderId, type])
+  @@index([userId, createdAt])
 }

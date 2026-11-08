@@ -1,4 +1,3 @@
-// Backend: Orders history & Home products logic
 import { Type } from 'class-transformer';
 import {
   IsIn,
@@ -14,9 +13,6 @@ import {
 export const ORDER_STATUS_VALUES = [
   'PENDING',
   'PAID',
-  'PREPARING',
-  'READY',
-  'COMPLETED',
   'PAYMENT_FAILED',
   'CANCELLED',
 ] as const;
@@ -43,18 +39,11 @@ export class ListOrdersQuery {
   @Min(1)
   page?: number;
 
+  /** Mặc định 10, tối đa 50 (AC-23.4) */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(50)
   pageSize?: number;
-}
-
-/** Barista/nhân viên cập nhật tiến độ pha chế. */
-export class UpdateOrderStatusDto {
-  @IsIn(['PREPARING', 'READY', 'COMPLETED'], {
-    message: 'Trạng thái không hợp lệ',
-  })
-  status: 'PREPARING' | 'READY' | 'COMPLETED';
 }

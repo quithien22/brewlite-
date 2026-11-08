@@ -51,7 +51,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
         </div>
         <h1 className="text-2xl font-bold text-ink sm:text-[28px]">Đặt hàng thành công</h1>
         <p className="mt-2 text-sm text-muted">
-          Cảm ơn bạn! Chúng mình đã nhận được thanh toán và đang chuẩn bị đồ uống.
+          Cảm ơn bạn! Chúng mình đã nhận được thanh toán và đơn của bạn đã được ghi nhận.
         </p>
 
         <dl className="mt-6 divide-y divide-line rounded-xl bg-cream/60 px-4 text-left text-sm sm:px-5">

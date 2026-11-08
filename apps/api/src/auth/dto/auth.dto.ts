@@ -8,11 +8,9 @@ import {
   MinLength,
 } from 'class-validator';
 
+/** AC-01.4: email chuẩn hóa chữ thường, cắt khoảng trắng trước khi lưu. */
 const normalizeEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
-
-/** Chỉ chấp nhận địa chỉ Gmail khi ĐĂNG KÝ (đăng nhập / quên mật khẩu không giới hạn để tài khoản demo @brewlite.vn vẫn đăng nhập được). */
-const GMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
 
 export class RegisterDto {
   @IsString({ message: 'Họ tên không hợp lệ' })
@@ -22,13 +20,11 @@ export class RegisterDto {
 
   @Transform(normalizeEmail)
   @IsEmail({}, { message: 'Email không hợp lệ' })
-  @Matches(GMAIL_REGEX, {
-    message: 'Chỉ chấp nhận email Gmail (ví dụ: ten@gmail.com)',
-  })
   email: string;
 
+  /** 0xxxxxxxxx hoặc +84xxxxxxxxx (AC-01.3) */
   @IsOptional()
-  @Matches(/^(0|\+84)\d{9,10}$/, { message: 'Số điện thoại không hợp lệ' })
+  @Matches(/^(0\d{9}|\+84\d{9})$/, { message: 'Số điện thoại không hợp lệ' })
   phone?: string;
 
   @IsString()

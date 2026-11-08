@@ -1,5 +1,6 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+# CI: cài đặt -> lint -> test -> build, chạy khi mở pull request và khi push vào main.
+# Nên đặt các job api / web / e2e làm "required status check" trong branch protection
+# để pull request không merge được khi lint, test hoặc build thất bại.
 
 name: Node.js CI
 
@@ -27,8 +28,8 @@ jobs:
           cache-dependency-path: apps/api/package-lock.json
       - run: npm ci
       - run: npx prisma generate
+      - run: npm test
       - run: npm run build
-      - run: npm test -- --passWithNoTests
 
   web:
     runs-on: ubuntu-latest
@@ -49,8 +50,8 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-  # E2E: chạy API thật + PostgreSQL, rồi chạy các test trong tests/e2e.
-  # Các bước giống CMD trong apps/api/Dockerfile: db push -> seed -> node dist/main.
+  # E2E: chạy API thật + PostgreSQL (migration + seed), rồi chạy các test trong tests/e2e.
+  # Các bước giống CMD trong apps/api/Dockerfile: migrate deploy -> seed -> node dist/main.
   e2e:
     needs: [api, web]
     runs-on: ubuntu-latest
@@ -87,11 +88,11 @@ jobs:
         working-directory: apps/api
         run: npm ci
 
-      - name: Tạo bảng, nạp dữ liệu mẫu và build API
+      - name: Chạy migration, nạp dữ liệu mẫu và build API
         working-directory: apps/api
         run: |
           npx prisma generate
-          npx prisma db push --skip-generate
+          npx prisma migrate deploy
           npx prisma db seed
           npm run build
 
@@ -99,10 +100,10 @@ jobs:
         working-directory: apps/api
         run: nohup node dist/main > "$GITHUB_WORKSPACE/api.log" 2>&1 &
 
-      - name: Chờ API sẵn sàng
+      - name: Chờ API sẵn sàng (GET /health)
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS "$API_URL/" > /dev/null; then
+            if curl -fsS "$API_URL/health" > /dev/null; then
               echo "API đã sẵn sàng"
               exit 0
             fi
