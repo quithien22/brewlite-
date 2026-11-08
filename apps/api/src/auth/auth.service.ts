@@ -12,13 +12,13 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { ForgotPasswordDto, LoginDto, RegisterDto } from './dto/auth.dto';
 
+/** Không bao giờ trả passwordHash ra ngoài. */
 export function toPublicUser(user: User) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     phone: user.phone,
-    role: user.role,
     loyaltyPoints: user.loyaltyPoints,
   };
 }
@@ -63,22 +63,17 @@ export class AuthService {
 
   async me(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) 
-      throw new UnauthorizedException();
+    if (!user) throw new UnauthorizedException();
     return toPublicUser(user);
   }
 
   /**
-   * POST /auth/forgot-password
+   * POST /auth/forgot-password (ngoài phạm vi MVP, giữ nguyên hành vi cũ)
    * Luôn trả cùng một thông báo để không lộ email nào đã đăng ký.
-   * Phạm vi bài tập: không gửi email thật, chỉ ghi log mô phỏng dịch vụ gửi
-   * mail (không phát token ở đây vì JwtStrategy chấp nhận mọi token cùng secret).
    */
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.prisma.user.findUnique({
-      where: { 
-        email: dto.email 
-      },
+      where: { email: dto.email },
     });
     if (user) {
       this.logger.log(
@@ -92,10 +87,10 @@ export class AuthService {
   }
 
   private async buildSession(user: User) {
+    // JWT chứa sub, email (AC-02.1)
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
       email: user.email,
-      role: user.role,
     });
     return { accessToken, user: toPublicUser(user) };
   }

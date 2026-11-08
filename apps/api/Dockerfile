@@ -19,5 +19,5 @@ RUN npx prisma generate && npm run build
 ENV NODE_ENV=production
 EXPOSE 4000
 
-# Đồng bộ schema -> nạp dữ liệu mẫu (idempotent) -> chạy API
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npx prisma db seed && node dist/main"]
+# Chạy migration (không dùng db push) -> nạp dữ liệu mẫu (idempotent) -> chạy API
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/main"]

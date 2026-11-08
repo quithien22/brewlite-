@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { btnOutline, btnPrimary, container } from "@/components/ui/classes";
 import ProductImage from "@/components/ui/ProductImage";
@@ -10,7 +10,6 @@ import { api } from "@/lib/api";
 import { vnd } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { ProductDetail, SizeCode } from "@/lib/types";
-import { useAuthStore } from "@/store/auth";
 import { MAX_QTY, useCartStore } from "@/store/cart";
 
 // ============================================================================
@@ -80,8 +79,6 @@ interface ProductFormProps {
 function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
   const addLine = useCartStore((s) => s.addLine);
-  const token = useAuthStore((s) => s.token);
-  const pathname = usePathname();
 
   const { sizes, toppings, sugarLevels, iceLevels, defaultSugar, defaultIce } =
     product.options;
@@ -100,7 +97,6 @@ function ProductForm({ product }: ProductFormProps) {
   const [toppingIds, setToppingIds] = useState<number[]>([]);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
-  const [needLogin, setNeedLogin] = useState(false);
 
   // --- TÍNH TOÁN GIÁ & SỐ LƯỢNG (MEMOIZED) ---
   // Sử dụng Set để kiểm tra topping được chọn nhanh hơn với độ phức tạp O(1)
@@ -143,17 +139,11 @@ function ProductForm({ product }: ProductFormProps) {
 
   /**
    * Đưa sản phẩm vào giỏ hàng Zustand
+   * MVP: khách chưa đăng nhập vẫn thêm được vào giỏ; chỉ phải đăng nhập khi bấm "Đặt hàng".
    * Lưu ý bảo mật: Backend vẫn bắt buộc phải tính toán lại giá trị thực tế dựa trên DB khi tạo đơn hàng.
    */
   function add(): boolean {
     if (isOutOfStock) return false;
-
-    // Phải đăng nhập mới được thêm vào giỏ: hiện thông báo kèm liên kết đăng nhập.
-    if (!token) {
-      setAdded(false);
-      setNeedLogin(true);
-      return false;
-    }
 
     addLine({
       productId: product.id,
@@ -166,7 +156,6 @@ function ProductForm({ product }: ProductFormProps) {
       unitPrice,
       qty,
     });
-    setNeedLogin(false);
     setAdded(true);
     return true;
   }
@@ -354,32 +343,6 @@ function ProductForm({ product }: ProductFormProps) {
               Mua ngay
             </button>
           </div>
-
-          {/* Thông báo khi chưa đăng nhập mà bấm thêm vào giỏ */}
-          {needLogin && (
-            <div
-              role="alert"
-              className="flex items-center justify-between gap-2 rounded-lg bg-[#FDECEC] px-4 py-3 text-sm text-[#B42318]"
-            >
-              <span>
-                Bạn phải đăng nhập mới được thêm sản phẩm vào giỏ hàng.{" "}
-                <Link
-                  href={`/login?next=${encodeURIComponent(pathname + window.location.search)}`}
-                  className="font-bold underline hover:opacity-80"
-                >
-                  Đăng nhập
-                </Link>
-              </span>
-              <button
-                type="button"
-                aria-label="Đóng thông báo"
-                onClick={() => setNeedLogin(false)}
-                className="ml-2 font-bold hover:opacity-70"
-              >
-                ✕
-              </button>
-            </div>
-          )}
 
           {/* Thông báo phản hồi trạng thái thêm giỏ hàng thành công */}
           {added && (

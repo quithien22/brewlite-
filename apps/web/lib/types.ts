@@ -1,13 +1,7 @@
 export type SizeCode = "S" | "M" | "L";
 
-export type OrderStatus =
-  | "PENDING"
-  | "PAID"
-  | "PREPARING"
-  | "READY"
-  | "COMPLETED"
-  | "PAYMENT_FAILED"
-  | "CANCELLED";
+/** MVP: PAID là trạng thái cuối, không có trạng thái pha chế. */
+export type OrderStatus = "PENDING" | "PAID" | "PAYMENT_FAILED" | "CANCELLED";
 
 export type PaymentMethod = "WALLET" | "CARD";
 
@@ -16,7 +10,6 @@ export interface User {
   name: string;
   email: string;
   phone: string | null;
-  role: "CUSTOMER" | "STAFF";
   loyaltyPoints: number;
 }
 
@@ -92,7 +85,7 @@ export interface Payment {
   id: number;
   method: PaymentMethod;
   provider: string;
-  status: "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
+  status: "PROCESSING" | "SUCCESS" | "FAILED";
   amount: number;
   transactionId: string | null;
   failureReason: string | null;

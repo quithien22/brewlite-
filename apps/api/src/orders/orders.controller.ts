@@ -1,4 +1,3 @@
-// Backend: Orders history & Home products logic
 import {
   Body,
   Controller,
@@ -6,19 +5,22 @@ import {
   HttpCode,
   Param,
   ParseIntPipe,
-  Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../auth/auth.guards';
+import { CurrentUser, JwtAuthGuard } from '../auth/auth.guards';
 import type { AuthUser } from '../auth/jwt.strategy';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { ListOrdersQuery, UpdateOrderStatusDto } from './dto/order-query.dto';
+import { ListOrdersQuery } from './dto/order-query.dto';
 import { OrdersService } from './orders.service';
 
+/**
+ * Không có API nào cho client đặt trạng thái đơn trực tiếp (AC-25.4):
+ * trạng thái chỉ đổi qua thanh toán, hủy đơn hoặc hết hạn.
+ */
 @Controller('orders')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
 
@@ -49,15 +51,5 @@ export class OrdersController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.orders.cancel(user.id, id);
-  }
-
-  /** PATCH /orders/:id/status — chỉ nhân viên quầy (STAFF) */
-  @Patch(':id/status')
-  @Roles('STAFF')
-  updateStatus(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateOrderStatusDto,
-  ) {
-    return this.orders.updateStatus(id, dto);
   }
 }

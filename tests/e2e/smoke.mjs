@@ -1,4 +1,4 @@
-// E2E smoke test: đăng nhập -> xem sản phẩm -> tạo đơn -> thanh toán (idempotent) -> xem đơn.
+// E2E smoke test: đăng nhập -> xem sản phẩm -> tạo đơn (PENDING) -> thanh toán (idempotent) -> xem đơn (PAID).
 // Chạy (cần API + DB đã chạy và đã seed):  node tests/e2e/smoke.mjs
 // Đổi địa chỉ API:  API_URL=http://localhost:4000 node tests/e2e/smoke.mjs
 import assert from 'node:assert/strict';
@@ -33,10 +33,11 @@ async function step(name, fn) {
 
 console.log(`E2E smoke test -> ${API}`);
 
-await step('GET / (health)', async () => {
-  const r = await call('/');
-  assert.equal(r.status, 200);
+await step('GET /health', async () => {
+  const r = await call('/health');
+  assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.status, 'ok');
+  assert.equal(r.data.database, 'up');
 });
 
 await step('POST /auth/login (demo@brewlite.vn)', async () => {
@@ -54,11 +55,13 @@ await step('GET /products', async () => {
   const r = await call('/products');
   assert.equal(r.status, 200);
   assert.ok(Array.isArray(r.data) && r.data.length > 0, 'danh sách sản phẩm rỗng');
-  productId = r.data[0].id;
+  const inStock = r.data.find((p) => p.inStock);
+  assert.ok(inStock, 'không có sản phẩm còn hàng');
+  productId = inStock.id;
 });
 
 let orderId;
-await step('POST /orders', async () => {
+await step('POST /orders (đơn PENDING)', async () => {
   const r = await call('/orders', {
     method: 'POST',
     body: { items: [{ productId, size: 'S', qty: 1 }] },
@@ -66,6 +69,7 @@ await step('POST /orders', async () => {
   assert.equal(r.status, 201, JSON.stringify(r.data));
   orderId = r.data.id;
   assert.ok(orderId, 'đơn hàng không có id');
+  assert.equal(r.data.status, 'PENDING');
 });
 
 const key = randomUUID();
@@ -97,10 +101,16 @@ await step('POST /payments lặp cùng Idempotency-Key không trừ tiền lần
   assert.deepEqual(second, first, 'kết quả khác lần gọi đầu');
 });
 
-await step('GET /orders/:id (đã thanh toán)', async () => {
+await step('GET /orders/:id (đã thanh toán = PAID, trạng thái cuối)', async () => {
   const r = await call(`/orders/${orderId}`);
   assert.equal(r.status, 200);
-  assert.notEqual(r.data.status, 'PENDING');
+  assert.equal(r.data.status, 'PAID');
+  assert.equal(r.data.canCancel, false);
+});
+
+await step('POST /orders/:id/cancel đơn PAID bị từ chối (400)', async () => {
+  const r = await call(`/orders/${orderId}/cancel`, { method: 'POST' });
+  assert.equal(r.status, 400, JSON.stringify(r.data));
 });
 
 console.log('Tất cả bước đều đạt.');

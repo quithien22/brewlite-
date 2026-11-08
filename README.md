@@ -36,24 +36,20 @@ docker compose up --build
 ```
 
 - Frontend: http://localhost:3000
-- Backend: http://localhost:4000
-- Lần đầu backend tự tạo bảng và nạp dữ liệu mẫu.
+- Backend: http://localhost:4000 (health check: http://localhost:4000/health)
+- Lần đầu backend chạy migration (`prisma migrate deploy`) rồi nạp dữ liệu mẫu.
+- Nếu trước đây đã chạy bản dùng `db push`, chạy `docker compose down -v` một lần để tạo lại database sạch.
 - Muốn đổi mật khẩu DB, `JWT_SECRET`... thì sao chép `.env.example` thành `.env` rồi sửa (không có `.env` thì dùng giá trị mặc định).
 
 ## Chạy thủ công
 
-```bash
-# 1) Database
-#MỞ
-docker compose up -d
-docker compose up -d db
-#TẮT
+`` 
 docker compose down
 
 # 2) Backend
 cd apps/api
 cp .env.example .env
-npm install && npx prisma generate && npx prisma db push && npm run seed
+npm install && npx prisma generate && npx prisma migrate deploy && npm run seed
 npm run start:dev            # :4000
 
 # 3) Frontend (terminal khác)
@@ -71,11 +67,9 @@ npx prisma studio
 | | |
 |---|---|
 | Khách hàng | `demo@brewlite.vn` / `Demo1234` (120 điểm) |
-| Nhân viên quầy | `staff@brewlite.vn` / `Staff1234` |
 | Mã khuyến mãi | `CHAO10`, `GIAM15K`, `COMBO20` |
 
-
-Cập nhật tiến độ đơn (barista) bằng `PATCH /orders/:id/status` với token của tài khoản STAFF; trang chi tiết đơn của khách tự làm mới mỗi 8 giây.
+MVP chỉ có vai trò khách hàng. Đơn thanh toán thành công ở trạng thái `PAID` (trạng thái cuối); đơn chưa thanh toán quá 15 phút sẽ tự hủy.
 
 ## Đối chiếu 10 task của đề bài
 
@@ -90,7 +84,7 @@ Cập nhật tiến độ đơn (barista) bằng `PATCH /orders/:id/status` vớ
 | 7 | Đăng ký / Đăng nhập JWT | `/auth/*`, `/login`, `/register` |
 | 8 | Thanh toán không tiền mặt (mock) | `POST /payments`, `/checkout` |
 | 9 | Xác nhận, lịch sử đơn, bàn giao | `/orders/*`, `GET /orders/me`, `docker-compose.yml` |
-| 10 | Nghiệp vụ backend (state machine, idempotent, tồn kho, khuyến mãi/điểm) | `apps/api/src/orders`, `payments`, `promotions` + test `npm test` |
+| 10 | Nghiệp vụ backend (state machine, idempotent, tồn kho, khuyến mãi/điểm) | `apps/api/src/orders`, `payments`, `promotions`, `loyalty` + test `npm test` |
 
 ## Kiểm thử
 

@@ -5,14 +5,13 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PAYMENT_PROCESSING_TTL_MS } from '../common/constants';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { OrdersService } from '../orders/orders.service';
 import { transitionOrder } from '../orders/order-transitions';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { MockPaymentGateway } from './mock-payment.gateway';
-
-/** Giao dịch PENDING quá lâu (server chết giữa chừng) sẽ không còn chặn đơn. */
-const PENDING_TTL_MS = 2 * 60 * 1000;
 
 function isUniqueViolation(e: unknown): boolean {
   return (
@@ -26,16 +25,18 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly gateway: MockPaymentGateway,
     private readonly orders: OrdersService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   /**
-   * POST /payments — thanh toán idempotent (Task 10 – yêu cầu 2).
+   * POST /payments — thanh toán idempotent (FR-18…21).
    *
-   * 1. Cùng Idempotency-Key gửi lại → trả đúng kết quả cũ, KHÔNG gọi cổng
-   *    thanh toán lần nữa (không trừ tiền 2 lần).
-   * 2. Key được "giữ chỗ" trước bằng bản ghi Payment(PENDING) có ràng buộc
-   *    unique → 2 request song song cùng key chỉ 1 request thắng.
-   * 3. Đơn đang có giao dịch PENDING hoặc đã PAID thì không thanh toán tiếp.
+   * 1. Cùng Idempotency-Key gửi lại → trả đúng kết quả cũ (replayed = true),
+   *    KHÔNG gọi cổng thanh toán lần nữa.
+   * 2. Key được giữ chỗ trước bằng bản ghi Payment(PROCESSING) có ràng buộc unique
+   *    → 2 request song song cùng key chỉ 1 request thắng.
+   * 3. Đơn đang có giao dịch PROCESSING (< 2 phút) hoặc không ở PENDING/PAYMENT_FAILED
+   *    thì không thanh toán tiếp. Số tiền luôn lấy từ CSDL.
    */
   async pay(userId: number, idempotencyKey: string, dto: CreatePaymentDto) {
     const existing = await this.prisma.payment.findUnique({
@@ -59,25 +60,25 @@ export class PaymentsService {
           );
         }
 
-        // Giao dịch demo bị treo sau khi backend bị tắt: đánh dấu FAILED.
-        // Kết quả trả về muộn sẽ không được phép cập nhật đơn nữa.
+        // Giao dịch PROCESSING quá 2 phút (cổng không phản hồi / server chết giữa chừng):
+        // xem là thất bại. Kết quả trả về muộn sẽ không được cập nhật đơn nữa.
         await tx.payment.updateMany({
           where: {
             orderId: order.id,
-            status: 'PENDING',
-            createdAt: { lte: new Date(Date.now() - PENDING_TTL_MS) },
+            status: 'PROCESSING',
+            createdAt: { lte: new Date(Date.now() - PAYMENT_PROCESSING_TTL_MS) },
           },
           data: {
             status: 'FAILED',
-            failureReason: 'Giao dịch demo đã quá thời gian chờ',
+            failureReason: 'Cổng thanh toán không phản hồi (quá thời gian chờ)',
           },
         });
 
         const inflight = await tx.payment.count({
           where: {
             orderId: order.id,
-            status: 'PENDING',
-            createdAt: { gt: new Date(Date.now() - PENDING_TTL_MS) },
+            status: 'PROCESSING',
+            createdAt: { gt: new Date(Date.now() - PAYMENT_PROCESSING_TTL_MS) },
           },
         });
         if (inflight > 0) {
@@ -109,7 +110,7 @@ export class PaymentsService {
             amount: order.total,
             method: dto.method,
             provider: this.gateway.providerName(dto.method),
-            status: 'PENDING',
+            status: 'PROCESSING',
           },
         });
         return { id: payment.id, amount: order.total };
@@ -145,28 +146,28 @@ export class PaymentsService {
       };
     }
 
-    // ---- Bước 3: lưu kết quả atomically + kiểm tra tình trạng payment ----
+    // ---- Bước 3: lưu kết quả trong một transaction ----
     await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
       });
-      // Đã hết hạn/được xử lý bởi tiến trình khác. Không ghi đè giao dịch cũ.
-      if (!payment || payment.status !== 'PENDING') return;
+      // Đã hết hạn / được xử lý bởi tiến trình khác. Không ghi đè giao dịch cũ.
+      if (!payment || payment.status !== 'PROCESSING') return;
 
       const order = await tx.order.findUniqueOrThrow({
         where: { id: dto.orderId },
       });
 
       if (order.status !== 'PENDING') {
-        // Đây chỉ là mock, trạng thái REFUNDED KHÔNG đồng nghĩa đã hoàn tiền thật.
+        // Đơn đã bị hủy / đổi trạng thái trong lúc chờ cổng: không chuyển đơn sang PAID.
         await tx.payment.updateMany({
-          where: { id: paymentId, status: 'PENDING' },
+          where: { id: paymentId, status: 'PROCESSING' },
           data: {
-            status: result.ok && order.status === 'CANCELLED' ? 'REFUNDED' : 'FAILED',
+            status: 'FAILED',
             provider: result.provider,
             transactionId: result.transactionId,
             failureReason: result.ok
-              ? 'Đơn đã thay đổi trạng thái khi xử lý thanh toán mock'
+              ? 'Đơn đã thay đổi trạng thái khi đang xử lý thanh toán'
               : result.failureReason,
           },
         });
@@ -174,7 +175,7 @@ export class PaymentsService {
       }
 
       const saved = await tx.payment.updateMany({
-        where: { id: paymentId, status: 'PENDING' },
+        where: { id: paymentId, status: 'PROCESSING' },
         data: {
           status: result.ok ? 'SUCCESS' : 'FAILED',
           provider: result.provider,
@@ -186,16 +187,13 @@ export class PaymentsService {
       await transitionOrder(tx, order, result.ok ? 'PAID' : 'PAYMENT_FAILED');
 
       if (result.ok) {
-        // Cộng điểm đúng 1 lần, bên trong cùng transaction.
+        // Cộng điểm đúng 1 lần (cờ pointsAwarded + bút toán EARN unique theo đơn), cùng transaction.
         const flag = await tx.order.updateMany({
           where: { id: order.id, pointsAwarded: false },
           data: { pointsAwarded: true },
         });
-        if (flag.count === 1 && order.pointsEarned > 0) {
-          await tx.user.update({
-            where: { id: userId },
-            data: { loyaltyPoints: { increment: order.pointsEarned } },
-          });
+        if (flag.count === 1) {
+          await this.loyalty.earn(tx, userId, order.id, order.pointsEarned);
         }
       }
     });
@@ -223,7 +221,7 @@ export class PaymentsService {
         'Idempotency-Key đã được dùng cho một yêu cầu thanh toán khác',
       );
     }
-    if (existing.status === 'PENDING') {
+    if (existing.status === 'PROCESSING') {
       throw new ConflictException('Giao dịch đang được xử lý, vui lòng đợi');
     }
     return this.buildResponse(userId, existing.id, true);

@@ -1,9 +1,9 @@
 /**
  * Dữ liệu mẫu cho BrewLite (chạy: `npm run seed` hoặc `npx prisma db seed`).
  * Có thể chạy lại nhiều lần: không tạo trùng, không ghi đè điểm thưởng của user.
- 
-*/
-import { DiscountType, PrismaClient, Role } from '@prisma/client';
+ * MVP chỉ có khách hàng nên chỉ seed tài khoản demo (không có tài khoản nhân viên).
+ */
+import { DiscountType, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -112,12 +112,13 @@ const PRODUCTS = [
     isFeatured: false,
   },
   {
+    // Tồn kho 0 để thử trạng thái "Hết hàng" (FR-08)
     name: 'Cold brew cam',
     description: 'Cà phê ủ lạnh 18 giờ với lát cam tươi. (Hết hàng — dùng để thử trạng thái hết hàng)',
     category: 'Cà phê',
     price: 52000,
     imageUrl: img('photo-1578314675249-a6910f80cc4e'),
-    stock: 100,
+    stock: 0,
     isFeatured: false,
   },
 ];
@@ -189,7 +190,7 @@ async function main() {
     });
   }
 
-  // ---- Tài khoản demo ----
+  // ---- Tài khoản demo (khách hàng) ----
   await prisma.user.upsert({
     where: { email: 'demo@brewlite.vn' },
     update: {},
@@ -198,18 +199,7 @@ async function main() {
       email: 'demo@brewlite.vn',
       phone: '0901234567',
       passwordHash: await bcrypt.hash('Demo1234', 10),
-      role: Role.CUSTOMER,
       loyaltyPoints: 120,
-    },
-  });
-  await prisma.user.upsert({
-    where: { email: 'staff@brewlite.vn' },
-    update: {},
-    create: {
-      name: 'Barista Quầy 1',
-      email: 'staff@brewlite.vn',
-      passwordHash: await bcrypt.hash('Staff1234', 10),
-      role: Role.STAFF,
     },
   });
 

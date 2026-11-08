@@ -1,5 +1,6 @@
 import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PaymentsService } from './payments.service';
 
 type AnyRecord = Record<string, any>;
@@ -8,6 +9,7 @@ type AnyRecord = Record<string, any>;
  * Prisma giả lập trong bộ nhớ, đủ cho PaymentsService:
  * - `Payment.idempotencyKey` có ràng buộc unique (ném P2002 như Prisma thật)
  * - `Order.updateMany({ where: { version } })` là khóa lạc quan
+ * - `LoyaltyTransaction` để kiểm tra bút toán EARN chỉ ghi một lần
  */
 function makeFakePrisma() {
   const order: AnyRecord = {
@@ -22,6 +24,7 @@ function makeFakePrisma() {
   const user = { id: 7, loyaltyPoints: 0 };
   const payments: AnyRecord[] = [];
   const logs: AnyRecord[] = [];
+  const ledger: AnyRecord[] = [];
   const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
   const fake: AnyRecord = {
@@ -35,15 +38,18 @@ function makeFakePrisma() {
       },
       count: async ({ where }: AnyRecord) =>
         payments.filter(
-          (p) => p.orderId === where.orderId && p.status === where.status &&
+          (p) =>
+            p.orderId === where.orderId &&
+            p.status === where.status &&
             (!where.createdAt?.gt || p.createdAt > where.createdAt.gt),
         ).length,
       updateMany: async ({ where, data }: AnyRecord) => {
-        const selected = payments.filter((p) =>
-          (where.id === undefined || p.id === where.id) &&
-          (where.orderId === undefined || p.orderId === where.orderId) &&
-          (where.status === undefined || p.status === where.status) &&
-          (!where.createdAt?.lte || p.createdAt <= where.createdAt.lte),
+        const selected = payments.filter(
+          (p) =>
+            (where.id === undefined || p.id === where.id) &&
+            (where.orderId === undefined || p.orderId === where.orderId) &&
+            (where.status === undefined || p.status === where.status) &&
+            (!where.createdAt?.lte || p.createdAt <= where.createdAt.lte),
         );
         selected.forEach((payment) => Object.assign(payment, data));
         return { count: selected.length };
@@ -102,18 +108,30 @@ function makeFakePrisma() {
         return user;
       },
     },
+    loyaltyTransaction: {
+      findUnique: async ({ where }: AnyRecord) =>
+        ledger.find(
+          (l) =>
+            l.orderId === where.orderId_type.orderId &&
+            l.type === where.orderId_type.type,
+        ) ?? null,
+      create: async ({ data }: AnyRecord) => {
+        ledger.push(data);
+        return data;
+      },
+    },
     $transaction: async (fn: (tx: AnyRecord) => Promise<unknown>) => fn(fake),
   };
 
-  return { fake, order, user, payments };
+  return { fake, order, user, payments, ledger, logs };
 }
 
 function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } = {}) {
-  const { fake, order, user, payments } = makeFakePrisma();
+  const { fake, order, user, payments, ledger, logs } = makeFakePrisma();
   let chargeIndex = 0;
   const charge = jest.fn(async () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const ok = opts.gatewaySequence?.[chargeIndex++] ?? (opts.gatewayOk !== false);
+    const ok = opts.gatewaySequence?.[chargeIndex++] ?? opts.gatewayOk !== false;
     return !ok
       ? { ok: false, provider: 'MoMo', failureReason: 'Bị từ chối' }
       : { ok: true, provider: 'MoMo', transactionId: 'BL1MOMO' };
@@ -125,8 +143,13 @@ function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } 
       status: order.status,
     })),
   };
-  const service = new PaymentsService(fake as never, gateway as never, orders as never);
-  return { service, charge, order, user, payments };
+  const service = new PaymentsService(
+    fake as never,
+    gateway as never,
+    orders as never,
+    new LoyaltyService(),
+  );
+  return { service, charge, order, user, payments, ledger, logs };
 }
 
 const DTO = { orderId: 1, method: 'WALLET' as const };
@@ -149,14 +172,15 @@ describe('Thanh toán idempotent (Idempotency-Key)', () => {
     expect(order.status).toBe('PAID');
   });
 
-  it('gửi lặp nhiều lần (3 lần) vẫn chỉ cộng điểm thưởng đúng 1 lần', async () => {
-    const { service, user } = makeService();
+  it('gửi lặp nhiều lần (3 lần) vẫn chỉ cộng điểm đúng 1 lần và chỉ 1 bút toán EARN', async () => {
+    const { service, user, ledger } = makeService();
 
     await service.pay(7, 'key-abc-12345', DTO);
     await service.pay(7, 'key-abc-12345', DTO);
     await service.pay(7, 'key-abc-12345', DTO);
 
     expect(user.loyaltyPoints).toBe(8);
+    expect(ledger.filter((l) => l.type === 'EARN')).toHaveLength(1);
   });
 
   it('2 request song song cùng key → vẫn chỉ 1 lần trừ tiền', async () => {
@@ -198,6 +222,7 @@ describe('Thanh toán idempotent (Idempotency-Key)', () => {
     expect(failed.success).toBe(false);
     expect(failing.order.status).toBe('PAYMENT_FAILED');
     expect(failing.user.loyaltyPoints).toBe(0);
+    expect(failing.ledger).toHaveLength(0);
 
     // Gửi lại đúng key cũ → trả kết quả thất bại cũ, không gọi cổng lần nữa
     const replay = await failing.service.pay(7, 'key-fail-0001', DTO);
@@ -211,7 +236,6 @@ describe('Thanh toán idempotent (Idempotency-Key)', () => {
   });
 });
 
-
 describe('Bảo vệ thanh toán giả lập', () => {
   it('một Idempotency-Key không thể thay đổi phương thức thanh toán', async () => {
     const { service, charge } = makeService();
@@ -223,7 +247,9 @@ describe('Bảo vệ thanh toán giả lập', () => {
   });
 
   it('lỗi rồi thanh toán lại bằng key mới: chỉ cộng điểm một lần', async () => {
-    const { service, user, payments, order } = makeService({ gatewaySequence: [false, true] });
+    const { service, user, payments, order } = makeService({
+      gatewaySequence: [false, true],
+    });
     const first = await service.pay(7, 'key-fail-0001', DTO);
     expect(first.success).toBe(false);
     expect(order.status).toBe('PAYMENT_FAILED');
@@ -236,17 +262,60 @@ describe('Bảo vệ thanh toán giả lập', () => {
     expect(payments).toHaveLength(2);
   });
 
-  it('giao dịch PENDING quá hạn không được dùng kết quả đến muộn', async () => {
+  it('giao dịch PROCESSING quá 2 phút bị đánh dấu FAILED, không chặn thanh toán mới', async () => {
     const { service, payments, order } = makeService();
     payments.push({
-      id: 123, orderId: 1, idempotencyKey: 'old-transaction-key',
-      amount: 85000, method: 'WALLET', provider: 'MoMo',
-      status: 'PENDING', createdAt: new Date(Date.now() - 5 * 60_000),
+      id: 123,
+      orderId: 1,
+      idempotencyKey: 'old-transaction-key',
+      amount: 85000,
+      method: 'WALLET',
+      provider: 'MoMo',
+      status: 'PROCESSING',
+      createdAt: new Date(Date.now() - 5 * 60_000),
     });
 
     await service.pay(7, 'key-new-0001', DTO);
     expect(payments[0].status).toBe('FAILED');
     expect(order.status).toBe('PAID');
     expect(payments[1].status).toBe('SUCCESS');
+  });
+
+  it('đơn đang có giao dịch PROCESSING (< 2 phút) thì yêu cầu mới với key khác bị 409', async () => {
+    const { service, payments, charge } = makeService();
+    payments.push({
+      id: 50,
+      orderId: 1,
+      idempotencyKey: 'in-flight-key-1',
+      amount: 85000,
+      method: 'WALLET',
+      provider: 'MoMo',
+      status: 'PROCESSING',
+      createdAt: new Date(),
+    });
+
+    await expect(service.pay(7, 'key-other-0002', DTO)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(charge).not.toHaveBeenCalled();
+  });
+
+  it('gửi lại cùng key khi giao dịch còn PROCESSING → 409 "đang được xử lý"', async () => {
+    const { service, payments, charge } = makeService();
+    payments.push({
+      id: 50,
+      orderId: 1,
+      idempotencyKey: 'in-flight-key-1',
+      amount: 85000,
+      method: 'WALLET',
+      provider: 'MoMo',
+      status: 'PROCESSING',
+      createdAt: new Date(),
+    });
+
+    await expect(service.pay(7, 'in-flight-key-1', DTO)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(charge).not.toHaveBeenCalled();
   });
 });

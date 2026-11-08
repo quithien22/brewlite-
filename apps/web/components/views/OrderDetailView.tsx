@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { btnOutline, btnPrimary, card, container } from "@/components/ui/classes";
 import OrderSummaryCard from "@/components/ui/OrderSummaryCard";
 import ProductImage from "@/components/ui/ProductImage";
@@ -12,54 +12,44 @@ import {
   describeOptions,
   formatDateTime,
   METHOD_LABEL,
+  PAYMENT_STATUS_LABEL,
   STATUS_LABEL,
+  STORE,
   vnd,
 } from "@/lib/format";
 import { useApi, useRequireAuth } from "@/lib/hooks";
-import type { Order, OrderStatus } from "@/lib/types";
+import type { Order } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 
-/** Luồng thành công của đơn (khớp Order State Machine ở backend). */
-const FLOW: OrderStatus[] = ["PENDING", "PAID", "PREPARING", "READY", "COMPLETED"];
-/** Các trạng thái cần cập nhật tự động vì nhân viên quầy đang xử lý. */
-const LIVE: OrderStatus[] = ["PAID", "PREPARING", "READY"];
-
-function Progress({ status }: { status: OrderStatus }) {
-  const current = FLOW.indexOf(status);
-  if (current === -1) return null; // PAYMENT_FAILED / CANCELLED: chỉ hiện nhãn trạng thái.
+/** Thông điệp theo trạng thái. MVP: PAID là trạng thái cuối nên không còn tiến độ pha chế. */
+function StatusBanner({ order }: { order: Order }) {
+  if (order.status === "PAID") {
+    return (
+      <p className="rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm font-semibold text-[#1E7A43]">
+        Đơn đã thanh toán và được ghi nhận thành công. Mời tới {STORE.name} nhận đồ uống,
+        đọc mã đơn {order.code} với nhân viên quầy.
+      </p>
+    );
+  }
+  if (order.status === "PENDING") {
+    return (
+      <p className="rounded-lg bg-[#FFF3D6] px-4 py-3 text-sm font-semibold text-[#8A5A00]">
+        Đơn đang chờ thanh toán. Tồn kho được giữ cho bạn trong thời gian ngắn, đơn chưa thanh
+        toán sẽ tự hủy sau 15 phút.
+      </p>
+    );
+  }
+  if (order.status === "PAYMENT_FAILED") {
+    return (
+      <p className="rounded-lg bg-[#FBE7E7] px-4 py-3 text-sm font-semibold text-danger">
+        Thanh toán chưa thành công. Bạn có thể thử lại, đổi phương thức hoặc hủy đơn.
+      </p>
+    );
+  }
   return (
-    <div className="-mx-1 overflow-x-auto px-1 pb-1">
-      <ol className="flex min-w-[400px] items-center">
-        {FLOW.map((s, i) => {
-          const done = i <= current;
-          return (
-            <li key={s} className="flex flex-1 items-center last:flex-none">
-              <div className="flex flex-col items-center gap-1">
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                    done ? "bg-brand text-white" : "bg-line text-muted"
-                  }`}
-                >
-                  {done ? "✓" : i + 1}
-                </span>
-                <span
-                  className={`text-center text-[11px] font-semibold ${
-                    i === current ? "text-brand" : "text-muted"
-                  }`}
-                >
-                  {STATUS_LABEL[s]}
-                </span>
-              </div>
-              {i < FLOW.length - 1 && (
-                <span
-                  className={`mx-1 mb-5 h-0.5 flex-1 ${i < current ? "bg-brand" : "bg-line"}`}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+    <p className="rounded-lg bg-[#EAE3DC] px-4 py-3 text-sm font-semibold text-muted">
+      Đơn đã được hủy. Tồn kho, mã giảm giá và điểm thưởng đã dùng đã được hoàn lại.
+    </p>
   );
 }
 
@@ -74,15 +64,6 @@ export default function OrderDetailView({ id }: { id: number }) {
 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  // Tự làm mới khi đơn đang được cửa hàng xử lý
-  const status = order?.status;
-  useEffect(() => {
-    if (!status || !LIVE.includes(status)) return;
-    const timer = setInterval(reload, 8000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
 
   if (!ready || (loading && !order)) return <Loading label="Đang tải đơn hàng..." />;
 
@@ -109,11 +90,7 @@ export default function OrderDetailView({ id }: { id: number }) {
 
   async function cancel() {
     if (!order || busy) return;
-    const paid = order.status === "PAID";
-    const msg = paid
-      ? `Hủy đơn ${order.code}? Khoản đã thanh toán sẽ được hoàn lại.`
-      : `Hủy đơn ${order.code}?`;
-    if (!window.confirm(msg)) return;
+    if (!window.confirm(`Hủy đơn ${order.code}?`)) return;
     setBusy(true);
     setActionError(null);
     try {
@@ -141,16 +118,9 @@ export default function OrderDetailView({ id }: { id: number }) {
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
         <div className="flex flex-col gap-4 sm:gap-6">
-          {FLOW.includes(order.status) && (
-            <section className={card}>
-              <Progress status={order.status} />
-              {order.status === "READY" && (
-                <p className="mt-4 rounded-lg bg-[#E3EEF9] px-4 py-3 text-sm font-semibold text-[#2B5C8F]">
-                  Đồ uống của bạn đã sẵn sàng. Mời tới quầy nhận nhé!
-                </p>
-              )}
-            </section>
-          )}
+          <section className={card}>
+            <StatusBanner order={order} />
+          </section>
 
           <section className={card}>
             <h2 className="mb-4 text-lg font-bold text-ink">Sản phẩm</h2>
@@ -192,12 +162,7 @@ export default function OrderDetailView({ id }: { id: number }) {
                 <div className="flex justify-between">
                   <dt className="text-muted">Kết quả</dt>
                   <dd className="font-semibold text-ink">
-                    {{
-                      SUCCESS: "Thành công",
-                      FAILED: "Thất bại",
-                      PENDING: "Đang xử lý",
-                      REFUNDED: "Đã hoàn tiền",
-                    }[order.payment.status]}
+                    {PAYMENT_STATUS_LABEL[order.payment.status]}
                   </dd>
                 </div>
                 {order.payment.transactionId && (
@@ -219,7 +184,7 @@ export default function OrderDetailView({ id }: { id: number }) {
           </section>
 
           <section className={card}>
-            <h2 className="mb-4 text-lg font-bold text-ink">Lịch sử trạng thái</h2>
+            <h2 className="mb-4 text-lg font-bold text-ink">Nhật ký trạng thái</h2>
             <ol className="relative ml-2 border-l border-line pl-6">
               {order.timeline.map((t, idx) => (
                 <li key={`${t.status}-${idx}`} className="relative pb-5 last:pb-0">
