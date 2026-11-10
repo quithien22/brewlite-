@@ -22,7 +22,7 @@ export default function Footer() {
           <div className="flex flex-col">
             <h3 className="font-bold text-[15px] sm:text-[16px]">Một ly ngon, một ngày nhẹ nhàng.</h3>
             <p>Mở cửa mỗi ngày · 07:00 – 22:00</p>
-            <p>Hotline: 1900 1042 · hello@brewlite.vn</p>
+            <p>Hotline: 0981918724 · brewlite@gmail.com</p>
           </div>
 
           {/* Cột 2: Khám phá */}
@@ -37,7 +37,7 @@ export default function Footer() {
           <div className="flex flex-col">
             <h3 className="font-bold text-[15px] sm:text-[16px]">Luôn bên bạn</h3>
             <p>Thanh toán an toàn, không tiền mặt</p>
-            <p>Hỗ trợ: 1900 1042</p>
+            <p>Hỗ trợ: 0981918724</p>
           </div>
 
         </div>
