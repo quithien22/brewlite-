@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/lib/types";
+import { useCartStore } from "@/store/cart";
 
 interface AuthState {
   token: string | null;
@@ -21,7 +22,11 @@ export const useAuthStore = create<AuthState>()(
       hydrated: false,
       setSession: (token, user) => set({ token, user }),
       setUser: (user) => set({ user }),
-      logout: () => set({ token: null, user: null }),
+      logout: () => {
+        set({ token: null, user: null });
+        // Giỏ hàng gắn với phiên đăng nhập: đăng xuất thì xóa giỏ (kể cả bản lưu trong trình duyệt)
+        useCartStore.getState().clear();
+      },
     }),
     {
       name: "brewlite-auth",
