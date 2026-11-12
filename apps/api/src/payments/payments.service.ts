@@ -1,11 +1,13 @@
 import {
+  BadGatewayException,
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PAYMENT_PROCESSING_TTL_MS } from '../common/constants';
+import { PAYMENT_PROCESSING_TTL_MS, refundWindowMs } from '../common/constants';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { OrdersService } from '../orders/orders.service';
 import { transitionOrder } from '../orders/order-transitions';
@@ -201,6 +203,131 @@ export class PaymentsService {
     return this.buildResponse(userId, paymentId, false);
   }
 
+  /**
+   * POST /payments/refund — khách hủy đơn đã thanh toán và được hoàn tiền.
+   *
+   * 1. Chỉ đơn PAID, còn trong thời hạn (REFUND_WINDOW_MINUTES kể từ lúc thanh toán) và khách
+   *    vẫn còn đủ số điểm đã được cộng từ đơn này.
+   * 2. Giữ chỗ bằng cách đổi Payment SUCCESS → REFUNDING (updateMany có điều kiện) nên bấm hai lần
+   *    hoặc 2 request song song chỉ 1 request được gọi cổng hoàn tiền.
+   * 3. Gọi cổng (ngoài transaction). Lỗi → trả Payment về SUCCESS, đơn vẫn PAID, khách thử lại được.
+   * 4. Thành công → 1 transaction: Payment REFUNDED, đơn REFUNDED, trả tồn kho / lượt mã /
+   *    điểm đã dùng, thu hồi điểm đã cộng.
+   */
+  async refund(userId: number, orderId: number) {
+    // ---- Bước 1: kiểm tra + giữ chỗ hoàn tiền ----
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id: orderId, userId },
+      });
+      if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
+      if (order.status === 'REFUNDED') {
+        throw new BadRequestException('Đơn hàng đã được hoàn tiền trước đó');
+      }
+      if (order.status !== 'PAID') {
+        throw new ConflictException('Chỉ đơn đã thanh toán mới được hoàn tiền');
+      }
+
+      const paidLog = await tx.orderStatusLog.findFirst({
+        where: { orderId: order.id, status: 'PAID' },
+        orderBy: { id: 'desc' },
+      });
+      const windowMs = refundWindowMs();
+      if (!paidLog || Date.now() - paidLog.createdAt.getTime() > windowMs) {
+        throw new UnprocessableEntityException(
+          `Đã quá ${Math.round(windowMs / 60_000)} phút kể từ lúc thanh toán nên không thể tự hủy. Vui lòng liên hệ cửa hàng.`,
+        );
+      }
+
+      if (order.pointsAwarded && order.pointsEarned > 0) {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { loyaltyPoints: true },
+        });
+        if (!user || user.loyaltyPoints < order.pointsEarned) {
+          throw new UnprocessableEntityException(
+            'Bạn đã dùng điểm thưởng của đơn này nên không thể hoàn tiền',
+          );
+        }
+      }
+
+      const payment = await tx.payment.findFirst({
+        where: { orderId: order.id, status: 'SUCCESS' },
+        orderBy: { id: 'desc' },
+      });
+      if (!payment) {
+        throw new ConflictException(
+          'Đơn hàng đang được xử lý hoàn tiền hoặc chưa có giao dịch thanh toán hợp lệ',
+        );
+      }
+
+      const claim = await tx.payment.updateMany({
+        where: { id: payment.id, status: 'SUCCESS' },
+        data: { status: 'REFUNDING' },
+      });
+      if (claim.count !== 1) {
+        throw new ConflictException('Đơn hàng đang được xử lý hoàn tiền');
+      }
+
+      return {
+        paymentId: payment.id,
+        amount: payment.amount,
+        method: payment.method,
+        transactionId: payment.transactionId,
+        pointsToRevoke: order.pointsAwarded ? order.pointsEarned : 0,
+      };
+    });
+
+    // ---- Bước 2: gọi cổng hoàn tiền (ngoài transaction) ----
+    let result: Awaited<ReturnType<MockPaymentGateway['refund']>>;
+    try {
+      result = await this.gateway.refund({
+        orderId,
+        amount: claimed.amount,
+        method: claimed.method,
+        transactionId: claimed.transactionId ?? undefined,
+      });
+    } catch {
+      result = {
+        ok: false,
+        provider: this.gateway.providerName(claimed.method),
+        failureReason: 'Cổng thanh toán không phản hồi',
+      };
+    }
+
+    if (!result.ok) {
+      // Thất bại: trả giao dịch về SUCCESS để khách thử lại, đơn vẫn PAID
+      await this.prisma.payment.updateMany({
+        where: { id: claimed.paymentId, status: 'REFUNDING' },
+        data: { status: 'SUCCESS' },
+      });
+      throw new BadGatewayException(
+        result.failureReason ?? 'Hoàn tiền không thành công, vui lòng thử lại sau',
+      );
+    }
+
+    // ---- Bước 3: ghi kết quả trong một transaction ----
+    await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.payment.updateMany({
+        where: { id: claimed.paymentId, status: 'REFUNDING' },
+        data: {
+          status: 'REFUNDED',
+          refundTransactionId: result.transactionId,
+          refundedAt: new Date(),
+        },
+      });
+      if (saved.count !== 1) return;
+      await this.orders.refundInTx(tx, orderId);
+      await this.loyalty.revoke(tx, userId, orderId, claimed.pointsToRevoke);
+    });
+
+    return {
+      refunded: true,
+      refundTransactionId: result.transactionId,
+      order: await this.orders.findOneForUser(userId, orderId),
+    };
+  }
+
   private async replay(
     userId: number,
     dto: CreatePaymentDto,
@@ -239,7 +366,7 @@ export class PaymentsService {
     const order = await this.orders.findOneForUser(userId, payment.orderId);
 
     return {
-      success: payment.status === 'SUCCESS',
+      success: ['SUCCESS', 'REFUNDING', 'REFUNDED'].includes(payment.status),
       replayed,
       payment: {
         id: payment.id,

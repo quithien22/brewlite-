@@ -27,18 +27,21 @@ export function formatDateTime(iso: string | Date) {
   return `${formatDate(iso)} · ${formatTime(iso)}`;
 }
 
-/** Đơn PAID được xem là đã đặt thành công (trạng thái cuối trong MVP). */
+/** Đơn PAID là đã đặt thành công; chỉ có thể chuyển sang REFUNDED khi khách hủy + được hoàn tiền trong thời hạn. */
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: "Chờ thanh toán",
   PAID: "Đã thanh toán",
   PAYMENT_FAILED: "Thanh toán thất bại",
   CANCELLED: "Đã hủy",
+  REFUNDED: "Đã hoàn tiền",
 };
 
 export const PAYMENT_STATUS_LABEL = {
   PROCESSING: "Đang xử lý",
   SUCCESS: "Thành công",
   FAILED: "Thất bại",
+  REFUNDING: "Đang hoàn tiền",
+  REFUNDED: "Đã hoàn tiền",
 } as const;
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = {

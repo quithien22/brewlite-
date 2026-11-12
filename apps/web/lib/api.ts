@@ -9,6 +9,7 @@ import type {
   Product,
   ProductDetail,
   Promotion,
+  RefundResult,
   Session,
   SizeCode,
   User,
@@ -148,6 +149,12 @@ export const api = {
         method: "POST",
         body,
         headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    /** Hủy đơn đã thanh toán + hoàn tiền (chỉ trong thời hạn cho phép). */
+    refund: (orderId: number) =>
+      request<RefundResult>("/payments/refund", {
+        method: "POST",
+        body: { orderId },
       }),
   },
 };

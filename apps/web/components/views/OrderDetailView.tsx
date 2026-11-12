@@ -11,24 +11,32 @@ import { api, ApiError } from "@/lib/api";
 import {
   describeOptions,
   formatDateTime,
+  formatTime,
   METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
   STATUS_LABEL,
-  STORE,
   vnd,
 } from "@/lib/format";
 import { useApi, useRequireAuth } from "@/lib/hooks";
 import type { Order } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 
-/** Thông điệp theo trạng thái. MVP: PAID là trạng thái cuối nên không còn tiến độ pha chế. */
+/** Thông điệp theo trạng thái. MVP: không có tiến độ pha chế; đơn PAID chỉ hủy được (hoàn tiền) trong thời hạn. */
 function StatusBanner({ order }: { order: Order }) {
   if (order.status === "PAID") {
     return (
-      <p className="rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm font-semibold text-[#1E7A43]">
-        Đơn đã thanh toán và được ghi nhận thành công. Mời tới {STORE.name} nhận đồ uống,
-        đọc mã đơn {order.code} với nhân viên quầy.
-      </p>
+      <div className="rounded-lg bg-[#E6F3EA] px-4 py-3 text-sm font-semibold text-[#1E7A43]">
+        <p>
+          Đơn đã thanh toán và được ghi nhận thành công. Mời tới quầy nhận đồ uống,
+          đọc mã đơn {order.code} với nhân viên quầy.
+        </p>
+        {order.canRefund && order.refundUntil && (
+          <p className="mt-1 font-normal">
+            Đặt nhầm hoặc đặt dư? Bạn có thể hủy và được hoàn tiền đến{" "}
+            {formatTime(order.refundUntil)}.
+          </p>
+        )}
+      </div>
     );
   }
   if (order.status === "PENDING") {
@@ -43,6 +51,15 @@ function StatusBanner({ order }: { order: Order }) {
     return (
       <p className="rounded-lg bg-[#FBE7E7] px-4 py-3 text-sm font-semibold text-danger">
         Thanh toán chưa thành công. Bạn có thể thử lại, đổi phương thức hoặc hủy đơn.
+      </p>
+    );
+  }
+  if (order.status === "REFUNDED") {
+    return (
+      <p className="rounded-lg bg-[#E3ECF7] px-4 py-3 text-sm font-semibold text-[#2F5D8C]">
+        Đơn đã được hủy và hoàn tiền về {order.payment?.provider ?? "phương thức đã thanh toán"}.
+        Tồn kho, mã giảm giá và điểm thưởng đã dùng đã được hoàn lại; điểm đã cộng từ đơn
+        này đã được thu hồi.
       </p>
     );
   }
@@ -99,6 +116,32 @@ export default function OrderDetailView({ id }: { id: number }) {
       reload();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Đã có lỗi xảy ra");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Hủy đơn đã thanh toán: hoàn tiền về phương thức đã dùng (chỉ trong thời hạn mà server cho phép). */
+  async function refund() {
+    if (!order || busy) return;
+    const via = order.payment
+      ? METHOD_LABEL[order.payment.method]
+      : "phương thức đã thanh toán";
+    if (
+      !window.confirm(
+        `Hủy đơn ${order.code} và hoàn ${vnd(order.total)} về ${via}? Điểm thưởng đã nhận từ đơn này sẽ bị thu hồi.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.payments.refund(order.id);
+      api.auth.me().then(setUser).catch(() => {});
+      reload();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Đã có lỗi xảy ra");
+      reload(); // cập nhật lại (ví dụ đã hết hạn thì ẩn nút)
     } finally {
       setBusy(false);
     }
@@ -177,6 +220,14 @@ export default function OrderDetailView({ id }: { id: number }) {
                     <dd className="text-right text-ink">{order.payment.failureReason}</dd>
                   </div>
                 )}
+                {order.payment.refundedAt && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted">Hoàn tiền lúc</dt>
+                    <dd className="text-right text-ink">
+                      {formatDateTime(order.payment.refundedAt)}
+                    </dd>
+                  </div>
+                )}
               </dl>
             ) : (
               <p className="text-sm text-muted">Đơn chưa được thanh toán.</p>
@@ -210,7 +261,9 @@ export default function OrderDetailView({ id }: { id: number }) {
             pointsDiscount={order.pointsDiscount}
             total={order.total}
           >
-            {order.pointsEarned > 0 && order.status !== "CANCELLED" && (
+            {order.pointsEarned > 0 &&
+              order.status !== "CANCELLED" &&
+              order.status !== "REFUNDED" && (
               <p className="mt-3 text-xs font-semibold text-ok">
                 {order.pointsAwarded
                   ? `Bạn đã nhận +${order.pointsEarned} điểm thưởng từ đơn này.`
@@ -237,6 +290,15 @@ export default function OrderDetailView({ id }: { id: number }) {
                 className={`${btnOutline} mt-3 w-full`}
               >
                 {busy ? "Đang hủy..." : "Hủy đơn"}
+              </button>
+            )}
+            {order.canRefund && (
+              <button
+                onClick={refund}
+                disabled={busy}
+                className={`${btnOutline} mt-3 w-full`}
+              >
+                {busy ? "Đang hoàn tiền..." : "Hủy và hoàn tiền"}
               </button>
             )}
           </OrderSummaryCard>

@@ -15,6 +15,7 @@ export const ORDER_STATUS_VALUES = [
   'PAID',
   'PAYMENT_FAILED',
   'CANCELLED',
+  'REFUNDED',
 ] as const;
 
 export class ListOrdersQuery {

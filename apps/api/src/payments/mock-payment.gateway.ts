@@ -17,6 +17,21 @@ export interface ChargeResult {
   failureReason?: string;
 }
 
+export interface RefundRequest {
+  orderId: number;
+  amount: number;
+  method: PaymentMethod;
+  /** Mã giao dịch gốc cần hoàn. */
+  transactionId?: string;
+}
+
+export interface RefundResult {
+  ok: boolean;
+  provider: string;
+  transactionId?: string;
+  failureReason?: string;
+}
+
 /** Cổng thanh toán giả lập (mô phỏng Momo/VNPay). */
 @Injectable()
 export class MockPaymentGateway {
@@ -39,6 +54,17 @@ export class MockPaymentGateway {
       ok: true,
       provider,
       transactionId: `BL-${req.orderId}-${randomUUID()}`,
+    };
+  }
+
+  /** Hoàn tiền về đúng phương thức đã thanh toán. Sau này thay bằng API hoàn tiền của cổng thật. */
+  async refund(req: RefundRequest): Promise<RefundResult> {
+    const provider = this.providerName(req.method);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return {
+      ok: true,
+      provider,
+      transactionId: `RF-${req.orderId}-${randomUUID()}`,
     };
   }
 }

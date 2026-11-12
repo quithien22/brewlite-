@@ -8,14 +8,18 @@ import { EmptyState, ErrorState, Loading } from "@/components/ui/States";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { api } from "@/lib/api";
 import { formatDateTime, STATUS_LABEL, vnd } from "@/lib/format";
-import { useApi, useRequireAuth } from "@/lib/hooks";
+import { useApi } from "@/lib/hooks";
 import type { OrderPage, OrderStatus } from "@/lib/types";
+import { useAuthStore } from "@/store/auth";
 
 const PAGE_SIZE = 6;
 const STATUSES = Object.keys(STATUS_LABEL) as OrderStatus[];
 
 export default function OrdersView() {
-  const ready = useRequireAuth();
+  // Chưa đăng nhập thì hiện thông báo (giống giỏ hàng) thay vì tự chuyển thẳng sang /login
+  const token = useAuthStore((s) => s.token);
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const ready = hydrated && !!token;
 
   const [status, setStatus] = useState<OrderStatus | "">("");
   const [month, setMonth] = useState("");
@@ -47,7 +51,27 @@ export default function OrdersView() {
     setPage(1);
   }
 
-  if (!ready) return <Loading />;
+  if (!hydrated) return <Loading />;
+
+  if (!token) {
+    return (
+      <div className={`${container} py-6 sm:py-10`}>
+        <h1 className="mb-6 text-2xl font-bold text-ink sm:text-[32px]">Lịch sử đơn hàng</h1>
+        <EmptyState
+          title="Bạn cần đăng nhập để xem đơn hàng"
+          description="Đăng nhập để theo dõi trạng thái và xem lại các đơn bạn đã đặt."
+          href="/login?next=/orders"
+          action="Đăng nhập"
+        />
+        <p className="mt-4 text-center text-sm text-muted">
+          Chưa có tài khoản?{" "}
+          <Link href="/register" className="font-bold text-brand hover:underline">
+            Đăng ký ngay
+          </Link>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={`${container} py-6 sm:py-10`}>

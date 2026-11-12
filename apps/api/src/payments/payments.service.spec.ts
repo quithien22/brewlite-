@@ -1,4 +1,10 @@
-import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { PaymentsService } from './payments.service';
@@ -43,6 +49,16 @@ function makeFakePrisma() {
             p.status === where.status &&
             (!where.createdAt?.gt || p.createdAt > where.createdAt.gt),
         ).length,
+      findFirst: async ({ where }: AnyRecord) => {
+        const found = [...payments]
+          .reverse()
+          .find(
+            (p) =>
+              (where.orderId === undefined || p.orderId === where.orderId) &&
+              (where.status === undefined || p.status === where.status),
+          );
+        return found ? { ...found } : null;
+      },
       updateMany: async ({ where, data }: AnyRecord) => {
         const selected = payments.filter(
           (p) =>
@@ -98,13 +114,25 @@ function makeFakePrisma() {
     },
     orderStatusLog: {
       create: async ({ data }: AnyRecord) => {
-        logs.push(data);
-        return data;
+        const row = { id: logs.length + 1, createdAt: new Date(), ...data };
+        logs.push(row);
+        return row;
       },
+      findFirst: async ({ where }: AnyRecord) =>
+        [...logs]
+          .reverse()
+          .find((l) => l.orderId === where.orderId && l.status === where.status) ??
+        null,
     },
     user: {
+      findUnique: async () => ({ ...user }),
       update: async ({ data }: AnyRecord) => {
-        user.loyaltyPoints += data.loyaltyPoints.increment;
+        if (data.loyaltyPoints.increment) {
+          user.loyaltyPoints += data.loyaltyPoints.increment;
+        }
+        if (data.loyaltyPoints.decrement) {
+          user.loyaltyPoints -= data.loyaltyPoints.decrement;
+        }
         return user;
       },
     },
@@ -126,7 +154,9 @@ function makeFakePrisma() {
   return { fake, order, user, payments, ledger, logs };
 }
 
-function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } = {}) {
+function makeService(
+  opts: { gatewayOk?: boolean; gatewaySequence?: boolean[]; refundOk?: boolean } = {},
+) {
   const { fake, order, user, payments, ledger, logs } = makeFakePrisma();
   let chargeIndex = 0;
   const charge = jest.fn(async () => {
@@ -136,12 +166,21 @@ function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } 
       ? { ok: false, provider: 'MoMo', failureReason: 'Bị từ chối' }
       : { ok: true, provider: 'MoMo', transactionId: 'BL1MOMO' };
   });
-  const gateway = { providerName: () => 'MoMo', charge };
+  const refund = jest.fn(async (_req: unknown) =>
+    opts.refundOk === false
+      ? { ok: false, provider: 'MoMo', failureReason: 'Cổng từ chối hoàn tiền' }
+      : { ok: true, provider: 'MoMo', transactionId: 'RF-TEST-1' },
+  );
+  const gateway = { providerName: () => 'MoMo', charge, refund };
   const orders = {
     findOneForUser: jest.fn(async (_userId: number, id: number) => ({
       id,
       status: order.status,
     })),
+    // OrdersService.refundInTx thật sẽ chuyển REFUNDED + trả kho / mã / điểm đã dùng
+    refundInTx: jest.fn(async () => {
+      order.status = 'REFUNDED';
+    }),
   };
   const service = new PaymentsService(
     fake as never,
@@ -149,7 +188,7 @@ function makeService(opts: { gatewayOk?: boolean; gatewaySequence?: boolean[] } 
     orders as never,
     new LoyaltyService(),
   );
-  return { service, charge, order, user, payments, ledger, logs };
+  return { service, charge, refund, orders, order, user, payments, ledger, logs };
 }
 
 const DTO = { orderId: 1, method: 'WALLET' as const };
@@ -317,5 +356,106 @@ describe('Bảo vệ thanh toán giả lập', () => {
       ConflictException,
     );
     expect(charge).not.toHaveBeenCalled();
+  });
+});
+
+describe('Hủy đơn đã thanh toán + hoàn tiền', () => {
+  it('hoàn tiền trong thời hạn → đơn REFUNDED, gọi cổng đúng 1 lần, thu hồi điểm đã cộng', async () => {
+    const { service, refund, orders, order, payments, user, ledger } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+    expect(user.loyaltyPoints).toBe(8);
+
+    const res = await service.refund(7, 1);
+
+    expect(res.refunded).toBe(true);
+    expect(refund).toHaveBeenCalledTimes(1);
+    expect(refund).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 1, amount: 85000 }),
+    );
+    expect(orders.refundInTx).toHaveBeenCalledTimes(1);
+    expect(order.status).toBe('REFUNDED');
+    expect(payments[0].status).toBe('REFUNDED');
+    expect(payments[0].refundTransactionId).toBe('RF-TEST-1');
+    expect(user.loyaltyPoints).toBe(0);
+    expect(ledger.filter((l) => l.type === 'REVOKE')).toHaveLength(1);
+  });
+
+  it('bấm hoàn tiền hai lần → lần hai bị từ chối, chỉ gọi cổng 1 lần', async () => {
+    const { service, refund } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+    await service.refund(7, 1);
+
+    await expect(service.refund(7, 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(refund).toHaveBeenCalledTimes(1);
+  });
+
+  it('2 request hoàn tiền song song → chỉ 1 request được gọi cổng', async () => {
+    const { service, refund, ledger } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+
+    const results = await Promise.allSettled([
+      service.refund(7, 1),
+      service.refund(7, 1),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(refund).toHaveBeenCalledTimes(1);
+    expect(ledger.filter((l) => l.type === 'REVOKE')).toHaveLength(1);
+  });
+
+  it('quá thời hạn hoàn tiền → 422, không gọi cổng, đơn vẫn PAID', async () => {
+    const { service, refund, order, logs, payments } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+    logs.find((l) => l.status === 'PAID')!.createdAt = new Date(
+      Date.now() - 10 * 60_000,
+    );
+
+    await expect(service.refund(7, 1)).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    expect(refund).not.toHaveBeenCalled();
+    expect(order.status).toBe('PAID');
+    expect(payments[0].status).toBe('SUCCESS');
+  });
+
+  it('khách đã dùng hết điểm của đơn này → 422, không gọi cổng', async () => {
+    const { service, refund, user, order } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+    user.loyaltyPoints = 3; // đã tiêu bớt điểm, còn ít hơn 8 điểm đã cộng
+
+    await expect(service.refund(7, 1)).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    expect(refund).not.toHaveBeenCalled();
+    expect(order.status).toBe('PAID');
+    expect(user.loyaltyPoints).toBe(3);
+  });
+
+  it('cổng hoàn tiền lỗi → 502, đơn vẫn PAID, giao dịch về SUCCESS để thử lại', async () => {
+    const { service, orders, order, payments, user } = makeService({
+      refundOk: false,
+    });
+    await service.pay(7, 'key-abc-12345', DTO);
+
+    await expect(service.refund(7, 1)).rejects.toBeInstanceOf(BadGatewayException);
+    expect(orders.refundInTx).not.toHaveBeenCalled();
+    expect(order.status).toBe('PAID');
+    expect(payments[0].status).toBe('SUCCESS');
+    expect(user.loyaltyPoints).toBe(8); // chưa thu hồi điểm
+  });
+
+  it('đơn chưa thanh toán thì không hoàn tiền (409)', async () => {
+    const { service, refund } = makeService();
+
+    await expect(service.refund(7, 1)).rejects.toBeInstanceOf(ConflictException);
+    expect(refund).not.toHaveBeenCalled();
+  });
+
+  it('không hoàn tiền đơn của người khác (404)', async () => {
+    const { service, refund } = makeService();
+    await service.pay(7, 'key-abc-12345', DTO);
+
+    await expect(service.refund(99, 1)).rejects.toBeInstanceOf(NotFoundException);
+    expect(refund).not.toHaveBeenCalled();
   });
 });

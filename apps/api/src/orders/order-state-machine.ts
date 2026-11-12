@@ -4,28 +4,32 @@ import type { OrderStatus } from '@prisma/client';
 /**
  * Order State Machine (MVP, FR-25)
  *
- *  PENDING ──► PAID                    (PAID là trạng thái cuối)
+ *  PENDING ──► PAID ──► REFUNDED       (khách hủy + hoàn tiền trong thời hạn cho phép)
  *     │
  *     ├──► PAYMENT_FAILED ──► PENDING (thử lại) / CANCELLED
  *     └──► CANCELLED
  *
  * MVP không có trạng thái pha chế (PREPARING / READY / COMPLETED).
- * PAID và CANCELLED là trạng thái kết thúc.
+ * CANCELLED và REFUNDED là trạng thái kết thúc.
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   PENDING: ['PAID', 'PAYMENT_FAILED', 'CANCELLED'],
   PAYMENT_FAILED: ['PENDING', 'CANCELLED'],
-  PAID: [],
+  PAID: ['REFUNDED'],
   CANCELLED: [],
+  REFUNDED: [],
 };
 
-export const TERMINAL_STATUSES: readonly OrderStatus[] = ['PAID', 'CANCELLED'];
+export const TERMINAL_STATUSES: readonly OrderStatus[] = ['CANCELLED', 'REFUNDED'];
 
-/** Các trạng thái khách còn được phép hủy đơn (đơn PAID không hủy được). */
+/** Các trạng thái khách hủy trực tiếp được (chưa thanh toán, không cần hoàn tiền). */
 export const CANCELLABLE_STATUSES: readonly OrderStatus[] = [
   'PENDING',
   'PAYMENT_FAILED',
 ];
+
+/** Trạng thái được hủy kèm hoàn tiền (chỉ trong thời hạn REFUND_WINDOW_MINUTES). */
+export const REFUNDABLE_STATUSES: readonly OrderStatus[] = ['PAID'];
 
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_TRANSITIONS[from].includes(to);

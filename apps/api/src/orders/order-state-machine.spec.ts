@@ -8,7 +8,7 @@ import {
   canTransition,
 } from './order-state-machine';
 
-const ALL: OrderStatus[] = ['PENDING', 'PAID', 'PAYMENT_FAILED', 'CANCELLED'];
+const ALL: OrderStatus[] = ['PENDING', 'PAID', 'PAYMENT_FAILED', 'CANCELLED', 'REFUNDED'];
 
 /** Các cạnh hợp lệ theo FR-25. */
 const VALID: [OrderStatus, OrderStatus][] = [
@@ -17,6 +17,7 @@ const VALID: [OrderStatus, OrderStatus][] = [
   ['PAYMENT_FAILED', 'PENDING'], // thử thanh toán lại
   ['PENDING', 'CANCELLED'],
   ['PAYMENT_FAILED', 'CANCELLED'],
+  ['PAID', 'REFUNDED'], // hủy + hoàn tiền trong thời hạn cho phép
 ];
 
 describe('Order State Machine (MVP)', () => {
@@ -36,19 +37,26 @@ describe('Order State Machine (MVP)', () => {
     }
   });
 
-  it('PAID là trạng thái cuối: không hủy, không đi tiếp', () => {
-    expect(ORDER_TRANSITIONS.PAID).toHaveLength(0);
+  it('PAID chỉ đi tiếp được sang REFUNDED, không chuyển thẳng sang CANCELLED', () => {
+    expect([...ORDER_TRANSITIONS.PAID]).toEqual(['REFUNDED']);
     expect(canTransition('PAID', 'CANCELLED')).toBe(false);
     expect(canTransition('PAID', 'PENDING')).toBe(false);
   });
 
-  it('PAID và CANCELLED là trạng thái kết thúc', () => {
+  it('CANCELLED và REFUNDED là trạng thái kết thúc', () => {
+    expect([...TERMINAL_STATUSES].sort()).toEqual(['CANCELLED', 'REFUNDED']);
     for (const status of TERMINAL_STATUSES) {
       expect(ORDER_TRANSITIONS[status]).toHaveLength(0);
     }
   });
 
-  it('khách chỉ hủy được đơn PENDING hoặc PAYMENT_FAILED', () => {
+  it('đơn đã hoàn tiền không thể thanh toán hay hủy lại', () => {
+    expect(canTransition('REFUNDED', 'PAID')).toBe(false);
+    expect(canTransition('REFUNDED', 'PENDING')).toBe(false);
+    expect(canTransition('REFUNDED', 'CANCELLED')).toBe(false);
+  });
+
+  it('khách chỉ hủy trực tiếp được đơn PENDING hoặc PAYMENT_FAILED', () => {
     expect([...CANCELLABLE_STATUSES].sort()).toEqual(['PAYMENT_FAILED', 'PENDING']);
   });
 

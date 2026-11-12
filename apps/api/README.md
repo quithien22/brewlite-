@@ -42,13 +42,20 @@ MVP chỉ có vai trò khách hàng. Mã khuyến mãi mẫu: `CHAO10`, `GIAM15K
 | POST | `/orders` | Tạo đơn `PENDING` từ giỏ hàng (giá tính lại ở server) | JWT |
 | GET | `/orders/me` | Lịch sử đơn (`?status=&month=YYYY-MM&search=&page=`) | JWT |
 | GET | `/orders/:id` | Chi tiết đơn + nhật ký trạng thái | JWT |
-| POST | `/orders/:id/cancel` | Khách hủy đơn `PENDING`/`PAYMENT_FAILED` (hoàn kho, mã, điểm); đơn `PAID` không hủy được | JWT |
+| POST | `/orders/:id/cancel` | Khách hủy đơn `PENDING`/`PAYMENT_FAILED` (hoàn kho, mã, điểm); đơn `PAID` dùng `/payments/refund` | JWT |
 | POST | `/payments` | Thanh toán, **bắt buộc** header `Idempotency-Key` | JWT |
+| POST | `/payments/refund` | Hủy đơn `PAID` + hoàn tiền (body `{ "orderId": 1 }`), chỉ trong `REFUND_WINDOW_MINUTES` kể từ lúc thanh toán | JWT |
 
 ## Trạng thái đơn (MVP)
 
-`PENDING → PAID` (trạng thái cuối) · `PENDING → PAYMENT_FAILED → PENDING` (thử lại) · `PENDING/PAYMENT_FAILED → CANCELLED`.
+`PENDING → PAID → REFUNDED` (khách hủy + hoàn tiền trong thời hạn) · `PENDING → PAYMENT_FAILED → PENDING` (thử lại) · `PENDING/PAYMENT_FAILED → CANCELLED`.
 Chuyển trạng thái sai trả HTTP 409. Đơn chưa thanh toán quá `ORDER_EXPIRE_MINUTES` (mặc định 15) tự hủy.
+
+### Hủy đơn đã thanh toán (hoàn tiền)
+
+MVP không có trạng thái pha chế nên khách chỉ tự hủy được trong `REFUND_WINDOW_MINUTES` phút (mặc định 5) kể từ lúc thanh toán; quá hạn trả 422 (cần nhân viên xử lý, ngoài phạm vi MVP).
+Luồng `POST /payments/refund`: giữ chỗ `Payment SUCCESS → REFUNDING` (chống bấm hai lần / song song) → gọi cổng hoàn tiền → `Payment REFUNDED` + `Order REFUNDED`, trả tồn kho / lượt mã / điểm đã dùng và thu hồi điểm đã cộng (`LoyaltyType.REVOKE`).
+Nếu khách đã tiêu bớt điểm của đơn này (còn ít hơn số điểm đã cộng) thì từ chối 422, không gọi cổng. Cổng lỗi → 502, đơn vẫn `PAID`, khách thử lại được.
 
 ## Task 10 – nghiệp vụ backend
 
@@ -57,7 +64,7 @@ Chuyển trạng thái sai trả HTTP 409. Đơn chưa thanh toán quá `ORDER_E
 | Order State Machine | `src/orders/order-state-machine.ts` (`assertTransition`), `order-transitions.ts` (kèm optimistic locking + log trạng thái) |
 | Thanh toán idempotent | `src/payments/payments.service.ts` – giữ chỗ `Idempotency-Key` bằng bản ghi `Payment(PROCESSING)` có ràng buộc unique |
 | Tồn kho đồng thời | `src/orders/inventory.ts` – transaction + `version` (optimistic locking), xử lý theo id tăng dần để tránh deadlock |
-| Khuyến mãi & điểm thưởng | `src/promotions/*`, `src/loyalty/*` (sổ điểm EARN/REDEEM/REFUND), `src/common/pricing.ts` (1 điểm = 500đ; +1 điểm / 10.000đ, cộng đúng 1 lần khi `PAID`) |
+| Khuyến mãi & điểm thưởng | `src/promotions/*`, `src/loyalty/*` (sổ điểm EARN/REDEEM/REFUND/REVOKE), `src/common/pricing.ts` (1 điểm = 500đ; +1 điểm / 10.000đ, cộng đúng 1 lần khi `PAID`) |
 | Tự hủy đơn quá hạn | `src/orders/order-expiry.service.ts` |
 
 ## Kiểm thử
@@ -70,13 +77,13 @@ npm test
 | File test | Chứng minh |
 |---|---|
 | `order-state-machine.spec.ts` | (a) chặn mọi chuyển trạng thái sai |
-| `payments.service.spec.ts` | (b) gửi lại cùng `Idempotency-Key` chỉ tạo 1 giao dịch / 1 lần trừ tiền / cộng điểm 1 lần |
+| `payments.service.spec.ts` | (b) gửi lại cùng `Idempotency-Key` chỉ tạo 1 giao dịch / 1 lần trừ tiền / cộng điểm 1 lần; hủy + hoàn tiền đơn `PAID` đúng 1 lần, đúng thời hạn, thu hồi điểm |
 | `inventory.spec.ts` | (c) đặt đồng thời không vượt tồn kho |
 | `promotions.service.spec.ts` | tính giảm giá (%, cố định, trần) |
 | `loyalty.service.spec.ts` | cộng / trừ / hoàn điểm đúng một lần |
 
 ## Biến môi trường
 
-Xem `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `FRONTEND_URL` (CORS, nhiều origin cách nhau dấu phẩy), `ORDER_EXPIRE_MINUTES`.
+Xem `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `FRONTEND_URL` (CORS, nhiều origin cách nhau dấu phẩy), `ORDER_EXPIRE_MINUTES`, `REFUND_WINDOW_MINUTES`.
 
 > Lưu ý: thư mục này còn các file sinh ra từ `create-next-app` (`app/`, `next.config.ts`, `eslint.config.mjs`, `next-env.d.ts`, `AGENTS.md`, `public/`, `.next/`). Backend NestJS không dùng chúng (`tsconfig.build.json` chỉ biên dịch `src/`), có thể xóa an toàn.
