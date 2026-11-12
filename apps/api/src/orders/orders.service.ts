@@ -22,7 +22,7 @@ import { transitionOrder } from './order-transitions';
 interface CancellableOrder {
   id: number;
   userId: number;
-  status: 'PENDING' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'PAID' | 'PAYMENT_FAILED' | 'CANCELLED' | 'REFUNDED';
   version: number;
   couponCode: string | null;
   pointsUsed: number;
@@ -245,8 +245,25 @@ export class OrdersService {
   }
 
   /**
+   * Hoàn tiền xong (gọi từ PaymentsService trong transaction): chuyển REFUNDED +
+   * hoàn tồn kho, lượt mã, điểm khách đã dùng. Việc thu hồi điểm đã cộng do PaymentsService làm.
+   */
+  async refundInTx(tx: Prisma.TransactionClient, orderId: number) {
+    const order = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    await transitionOrder(tx, order, 'REFUNDED');
+    await releaseStock(tx, order.items);
+    if (order.couponCode) {
+      await this.promotions.release(tx, order.couponCode);
+    }
+    await this.loyalty.refund(tx, order.userId, order.id, order.pointsUsed);
+  }
+
+  /**
    * POST /orders/:id/cancel — khách hủy đơn chưa thanh toán (FR-26).
-   * Chỉ PENDING / PAYMENT_FAILED. Đơn PAID là trạng thái cuối nên không hủy được.
+   * Chỉ PENDING / PAYMENT_FAILED. Đơn PAID phải dùng POST /payments/refund (hủy + hoàn tiền).
    */
   async cancel(userId: number, id: number) {
     await this.prisma.$transaction(async (tx) => {
@@ -257,7 +274,12 @@ export class OrdersService {
       if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
 
       if (order.status === 'PAID') {
-        throw new BadRequestException('Đơn đã thanh toán nên không thể hủy');
+        throw new BadRequestException(
+          'Đơn đã thanh toán, hãy dùng "Hủy và hoàn tiền" trong thời hạn cho phép',
+        );
+      }
+      if (order.status === 'REFUNDED') {
+        throw new BadRequestException('Đơn hàng đã được hoàn tiền trước đó');
       }
       if (order.status === 'CANCELLED') {
         throw new BadRequestException('Đơn hàng đã được hủy trước đó');

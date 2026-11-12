@@ -1,7 +1,12 @@
 export type SizeCode = "S" | "M" | "L";
 
-/** MVP: PAID là trạng thái cuối, không có trạng thái pha chế. */
-export type OrderStatus = "PENDING" | "PAID" | "PAYMENT_FAILED" | "CANCELLED";
+/** MVP: không có trạng thái pha chế. PAID chỉ đi tiếp được sang REFUNDED (hủy + hoàn tiền trong thời hạn). */
+export type OrderStatus =
+  | "PENDING"
+  | "PAID"
+  | "PAYMENT_FAILED"
+  | "CANCELLED"
+  | "REFUNDED";
 
 export type PaymentMethod = "WALLET" | "CARD";
 
@@ -85,10 +90,11 @@ export interface Payment {
   id: number;
   method: PaymentMethod;
   provider: string;
-  status: "PROCESSING" | "SUCCESS" | "FAILED";
+  status: "PROCESSING" | "SUCCESS" | "FAILED" | "REFUNDING" | "REFUNDED";
   amount: number;
   transactionId: string | null;
   failureReason: string | null;
+  refundedAt?: string | null;
   createdAt: string;
 }
 
@@ -106,6 +112,9 @@ export interface Order {
   pointsEarned: number;
   pointsAwarded: boolean;
   canCancel: boolean;
+  /** Đơn PAID còn trong thời hạn hủy + hoàn tiền. */
+  canRefund: boolean;
+  refundUntil: string | null;
   createdAt: string;
   updatedAt: string;
   items: OrderItem[];
@@ -125,6 +134,12 @@ export interface PaymentResult {
   success: boolean;
   replayed: boolean;
   payment: Payment;
+  order: Order;
+}
+
+export interface RefundResult {
+  refunded: boolean;
+  refundTransactionId?: string;
   order: Order;
 }
 

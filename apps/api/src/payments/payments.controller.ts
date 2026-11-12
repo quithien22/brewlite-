@@ -3,12 +3,14 @@ import {
   Body,
   Controller,
   Headers,
+  HttpCode,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard } from '../auth/auth.guards';
 import type { AuthUser } from '../auth/jwt.strategy';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { RefundPaymentDto } from './dto/refund-payment.dto';
 import { PaymentsService } from './payments.service';
 
 @Controller('payments')
@@ -40,5 +42,12 @@ export class PaymentsController {
       throw new BadRequestException('Không cho phép ép kết quả thanh toán ở môi trường này');
     }
     return this.payments.pay(user.id, key, dto);
+  }
+
+  /** POST /payments/refund — hủy đơn đã thanh toán + hoàn tiền (trong thời hạn cho phép) */
+  @Post('refund')
+  @HttpCode(200)
+  refund(@CurrentUser() user: AuthUser, @Body() dto: RefundPaymentDto) {
+    return this.payments.refund(user.id, dto.orderId);
   }
 }

@@ -9,12 +9,14 @@ datasource db {
 
 // MVP chỉ có vai trò khách hàng nên không có enum Role.
 
-/// MVP: PAID là trạng thái cuối. Không có trạng thái pha chế (PREPARING/READY/COMPLETED).
+/// MVP: không có trạng thái pha chế (PREPARING/READY/COMPLETED).
+/// PAID chỉ đi tiếp được sang REFUNDED (khách hủy + hoàn tiền trong thời hạn cho phép).
 enum OrderStatus {
   PENDING
   PAID
   PAYMENT_FAILED
   CANCELLED
+  REFUNDED
 }
 
 enum PaymentMethod {
@@ -26,6 +28,8 @@ enum PaymentStatus {
   PROCESSING // đã giữ chỗ Idempotency-Key, đang chờ cổng thanh toán (tối đa 2 phút)
   SUCCESS
   FAILED
+  REFUNDING // đã giữ chỗ hoàn tiền, đang chờ cổng thanh toán
+  REFUNDED
 }
 
 enum DiscountType {
@@ -36,7 +40,8 @@ enum DiscountType {
 enum LoyaltyType {
   EARN
   REDEEM
-  REFUND
+  REFUND // hoàn điểm khách đã dùng khi hủy / hoàn tiền đơn
+  REVOKE // thu hồi điểm đã cộng khi hoàn tiền đơn đã thanh toán
 }
 
 model User {
@@ -146,6 +151,8 @@ model Payment {
   status         PaymentStatus
   transactionId  String?
   failureReason  String?
+  refundTransactionId String?
+  refundedAt     DateTime?
   createdAt      DateTime      @default(now())
 
   @@index([orderId])

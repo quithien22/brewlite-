@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { POINT_VALUE } from '../common/pricing';
+import { refundWindowMs } from '../common/constants';
 import { CANCELLABLE_STATUSES } from './order-state-machine';
 
 export const ORDER_INCLUDE = {
@@ -21,6 +22,20 @@ interface ToppingSnapshot {
 /** Chuyển bản ghi DB sang JSON trả về cho frontend. */
 export function mapOrder(order: OrderWithRelations) {
   const payment = order.payments[0] ?? null;
+
+  // Hạn hủy + hoàn tiền: tính từ lúc đơn chuyển sang PAID
+  const paidAt = [...order.statusLogs]
+    .reverse()
+    .find((l) => l.status === 'PAID')?.createdAt;
+  const refundUntil =
+    order.status === 'PAID' && paidAt
+      ? new Date(paidAt.getTime() + refundWindowMs())
+      : null;
+  const canRefund =
+    refundUntil !== null &&
+    refundUntil.getTime() > Date.now() &&
+    payment?.status === 'SUCCESS';
+
   return {
     id: order.id,
     code: `#${order.id}`,
@@ -35,6 +50,8 @@ export function mapOrder(order: OrderWithRelations) {
     pointsEarned: order.pointsEarned,
     pointsAwarded: order.pointsAwarded,
     canCancel: CANCELLABLE_STATUSES.includes(order.status),
+    canRefund,
+    refundUntil,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
     items: order.items.map((i) => ({
@@ -58,6 +75,7 @@ export function mapOrder(order: OrderWithRelations) {
       amount: payment.amount,
       transactionId: payment.transactionId,
       failureReason: payment.failureReason,
+      refundedAt: payment.refundedAt,
       createdAt: payment.createdAt,
     },
     timeline: order.statusLogs.map((l) => ({

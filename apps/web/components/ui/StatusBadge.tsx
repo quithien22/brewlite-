@@ -6,6 +6,7 @@ const STYLE: Record<OrderStatus, string> = {
   PAID: "bg-[#E6F3EA] text-[#1E7A43]",
   CANCELLED: "bg-[#EAE3DC] text-muted",
   PAYMENT_FAILED: "bg-[#FBE7E7] text-danger",
+  REFUNDED: "bg-[#E3ECF7] text-[#2F5D8C]",
 };
 
 export default function StatusBadge({ status }: { status: OrderStatus }) {

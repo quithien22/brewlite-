@@ -1,7 +1,7 @@
 # Chạy cả 3 thành phần: docker compose up --build
 #   Frontend : http://localhost:3000
 #   Backend  : http://localhost:4000
-#   Postgres : localhost:5432 (brewlite)
+#   Postgres : localhost:5433 (brewlite)
 services:
   db:
     image: postgres:16-alpine
@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brewlite}
       POSTGRES_DB: ${POSTGRES_DB:-brewlite}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - brewlite-db:/var/lib/postgresql/data
     healthcheck:

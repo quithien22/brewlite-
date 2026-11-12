@@ -24,7 +24,7 @@ export default function OrderSuccessView({ id }: { id: number }) {
     if (!order) return;
     if (order.status === "PENDING" || order.status === "PAYMENT_FAILED") {
       router.replace(`/orders/failed?id=${order.id}`);
-    } else if (order.status === "CANCELLED") {
+    } else if (order.status === "CANCELLED" || order.status === "REFUNDED") {
       router.replace(`/orders/detail?id=${order.id}`);
     }
   }, [order, router]);
@@ -37,7 +37,12 @@ export default function OrderSuccessView({ id }: { id: number }) {
       </div>
     );
   }
-  if (!order || order.status === "PENDING" || order.status === "PAYMENT_FAILED") {
+  if (
+    !order ||
+    order.status === "PENDING" ||
+    order.status === "PAYMENT_FAILED" ||
+    order.status === "REFUNDED"
+  ) {
     return <Loading />;
   }
 

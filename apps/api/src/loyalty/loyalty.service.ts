@@ -4,7 +4,7 @@ import type { LoyaltyType, Prisma } from '@prisma/client';
 type Tx = Prisma.TransactionClient;
 
 /**
- * Sổ điểm thưởng (EARN / REDEEM / REFUND).
+ * Sổ điểm thưởng (EARN / REDEEM / REFUND / REVOKE).
  * Mỗi đơn chỉ có tối đa một bút toán cho mỗi loại (unique orderId + type),
  * nên cộng điểm / hoàn điểm không bao giờ bị thực hiện hai lần.
  * Mọi hàm phải được gọi bên trong transaction của đơn / thanh toán.
@@ -56,6 +56,29 @@ export class LoyaltyService {
     await tx.user.update({
       where: { id: userId },
       data: { loyaltyPoints: { increment: points } },
+    });
+    return true;
+  }
+
+  /**
+   * Thu hồi điểm đã cộng (REVOKE) khi hoàn tiền đơn đã thanh toán. Chỉ thu hồi tối đa số điểm khách
+   * còn (không để điểm âm). Bước kiểm tra "còn đủ điểm" được làm trước khi gọi cổng hoàn tiền.
+   * Thu hồi hai lần không trừ hai lần (unique orderId + type).
+   */
+  async revoke(tx: Tx, userId: number, orderId: number, points: number) {
+    if (points <= 0 || (await this.exists(tx, orderId, 'REVOKE'))) return false;
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { loyaltyPoints: true },
+    });
+    const amount = Math.min(points, user?.loyaltyPoints ?? 0);
+    if (amount <= 0) return false;
+    await tx.loyaltyTransaction.create({
+      data: { userId, orderId, type: 'REVOKE', points: amount },
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { loyaltyPoints: { decrement: amount } },
     });
     return true;
   }
