@@ -76,7 +76,7 @@ const MENU_ITEMS: MenuItem[] = [
         category: 'Cà phê truyền thống',
         price: 29000,
         desc: 'Thức uống quốc dân với vị đắng đậm đặc trưng của hạt Robusta rang mộc, quyện cùng sữa đặc béo ngọt và đá mát lạnh giúp đánh thức năng lượng tức thì.',
-        image: '/images/menu/ca-phe-sua-da.jpg',
+        image: 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?auto=format&fit=crop&w=800&q=80',
         sizes: [
             { id: 'S', name: 'Size S (Nhỏ)', extraPrice: 0 },
             { id: 'M', name: 'Size M (Vừa)', extraPrice: 6000 },
