@@ -17,7 +17,7 @@ const PRODUCTS = [
     description: 'Cà phê phin đậm vị, hòa cùng sữa đặc béo ngọt.',
     category: 'Cà phê',
     price: 35000,
-    imageUrl: img('photo-1509042239860-f550ce710b93'),
+    imageUrl: img('photo-1517701550927-30cf4ba1dba5'),
     stock: 80,
     isFeatured: true,
   },
@@ -26,7 +26,7 @@ const PRODUCTS = [
     description: 'Espresso pha loãng, hậu vị sạch và thanh.',
     category: 'Cà phê',
     price: 40000,
-    imageUrl: img('photo-1495474472287-4d71bcdd2085'),
+    imageUrl: img('photo-1514432324607-a09d9b4aefdd'),
     stock: 60,
     isFeatured: false,
   },
@@ -35,7 +35,7 @@ const PRODUCTS = [
     description: 'Espresso, sữa nóng và lớp bọt sữa mịn như mây.',
     category: 'Cà phê',
     price: 45000,
-    imageUrl: img('photo-1461023058943-07fcbe16d735'),
+    imageUrl: img('photo-1534778101976-62847782c213'),
     stock: 60,
     isFeatured: true,
   },
@@ -53,7 +53,7 @@ const PRODUCTS = [
     description: 'Nhiều sữa, ít cà phê — ngọt dịu cho buổi chiều.',
     category: 'Cà phê',
     price: 38000,
-    imageUrl: img('photo-1509042239860-f550ce710b93'),
+    imageUrl: img('photo-1517701604599-bb29b565090c'),
     stock: 70,
     isFeatured: false,
   },
@@ -62,7 +62,7 @@ const PRODUCTS = [
     description: 'Trà đen thơm, đào miếng giòn mát, vị chua ngọt cân bằng.',
     category: 'Trà trái cây',
     price: 39000,
-    imageUrl: img('photo-1556679343-c7306c1976bc'),
+    imageUrl: img('photo-1556881286-fc6915169721'),
     stock: 70,
     isFeatured: true,
   },
@@ -80,7 +80,7 @@ const PRODUCTS = [
     description: 'Chanh tươi, mật ong và trà xanh — nhẹ người, tỉnh táo.',
     category: 'Trà trái cây',
     price: 35000,
-    imageUrl: img('photo-1556679343-c7306c1976bc'),
+    imageUrl: img('photo-1513558161293-cdaf765ed2fd'),
     stock: 50,
     isFeatured: false,
   },
@@ -98,7 +98,7 @@ const PRODUCTS = [
     description: 'Matcha Nhật xay mịn, béo nhẹ và thơm dịu.',
     category: 'Trà sữa',
     price: 48000,
-    imageUrl: img('photo-1558857563-b371033873b8'),
+    imageUrl: img('photo-1536256263959-770b48d82b0a'),
     stock: 40,
     isFeatured: false,
   },
@@ -107,7 +107,7 @@ const PRODUCTS = [
     description: 'Cacao đậm đà xay lạnh, phủ kem tươi.',
     category: 'Đá xay',
     price: 52000,
-    imageUrl: img('photo-1553909489-cd47e0907980'),
+    imageUrl: img('photo-1572490122747-3968b75cc699'),
     stock: 30,
     isFeatured: false,
   },
@@ -117,7 +117,7 @@ const PRODUCTS = [
     description: 'Cà phê ủ lạnh 18 giờ với lát cam tươi. (Hết hàng — dùng để thử trạng thái hết hàng)',
     category: 'Cà phê',
     price: 52000,
-    imageUrl: img('photo-1578314675249-a6910f80cc4e'),
+    imageUrl: img('photo-1770282184909-955dd7764a37'),
     stock: 0,
     isFeatured: false,
   },
@@ -132,10 +132,23 @@ const TOPPINGS = [
 ];
 
 async function main() {
-  // ---- Sản phẩm (bỏ qua nếu đã có cùng tên) ----
+  // ---- Sản phẩm (tạo mới hoặc cập nhật thông tin / ảnh) ----
   for (const p of PRODUCTS) {
     const existing = await prisma.product.findFirst({ where: { name: p.name } });
-    if (!existing) await prisma.product.create({ data: p });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: {
+          imageUrl: p.imageUrl,
+          description: p.description,
+          category: p.category,
+          price: p.price,
+          isFeatured: p.isFeatured,
+        },
+      });
+    } else {
+      await prisma.product.create({ data: p });
+    }
   }
 
   // ---- Topping ----
