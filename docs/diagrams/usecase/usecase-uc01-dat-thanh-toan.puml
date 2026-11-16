@@ -1,0 +1,64 @@
+@startuml usecase-uc01-dat-thanh-toan
+' ============================================================
+' BrewLite – Use case UC-01: Đặt và thanh toán đơn hàng
+' ============================================================
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam ActorBorderColor Black
+skinparam usecase {
+  BackgroundColor White
+  BorderColor Black
+}
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+}
+
+actor "Khách hàng" as KH
+actor "Cổng thanh toán\n(mô phỏng)" as CTT <<secondary actor>>
+
+rectangle "Hệ thống BrewLite – Use-case UC-01: Đặt và thanh toán đơn hàng" {
+
+  usecase "**Đặt và thanh toán**\n**đơn hàng**" as DAT #white;line.bold
+
+  usecase "Đăng nhập" as DN
+  usecase "Xem lại giỏ hàng &\nxác nhận đơn" as GIO
+  usecase "Tạo đơn hàng\n(trạng thái PENDING)" as TAO
+  usecase "Kiểm tra &\ngiữ tồn kho" as TONKHO
+  usecase "Tính lại tổng tiền\ntại máy chủ" as TONGTIEN
+
+  usecase "Thanh toán không\ndùng tiền mặt" as TT
+  usecase "Cộng điểm thưởng" as CONGDIEM
+  usecase "Phương thức thanh toán" as PTTT
+  usecase "Xử lý thanh toán\nthất bại" as TTLOI
+
+  usecase "Áp mã khuyến mãi" as MAKM
+  usecase "Dùng điểm thưởng" as DIEM
+}
+
+' ---------- Association ----------
+KH -[thickness=3]- DAT
+CTT -- TT
+
+' ---------- Include của UC-01 ----------
+DAT .> DN  : <<include>>
+DAT .> GIO : <<include>>
+DAT .> TAO : <<include>>
+DAT .> TT  : <<include>>
+
+' ---------- Tạo đơn hàng ----------
+TAO .> TONKHO   : <<include>>
+TAO .> TONGTIEN : <<include>>
+
+' ---------- Thanh toán ----------
+TT    .> CONGDIEM : <<include>>
+PTTT  .> TT       : <<extend>>
+TTLOI .> TT       : <<extend>>
+
+' ---------- Extend của UC-01 ----------
+MAKM .> DAT : <<extend>>
+DIEM .> DAT : <<extend>>
+
+@enduml

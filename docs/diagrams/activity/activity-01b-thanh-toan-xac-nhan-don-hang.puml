@@ -1,0 +1,76 @@
+@startuml activity-01b-thanh-toan-xac-nhan-don-hang
+' ============================================================
+' BrewLite – Activity-01b: Thanh toán và xác nhận đơn hàng
+' Lưu ý: dấu ";" là ký tự kết thúc action của PlantUML nên trong
+' nhãn được thay bằng dấu ",".
+' ============================================================
+title Activity-01b – Thanh toán và xác nhận đơn hàng
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam ConditionStyle InsideDiamond
+skinparam activity {
+  BackgroundColor White
+  BorderColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+}
+skinparam swimlane {
+  BorderColor Black
+}
+
+|Khách hàng|
+start
+repeat
+  |Khách hàng|
+  :Xem trang thanh toán,\nchọn Ví hoặc Thẻ;
+
+  |Giao diện (Next.js)|
+  :Sinh Idempotency-Key,\nPOST /payments;
+
+  |API (NestJS + PostgreSQL)|
+  :Xác thực JWT, kiểm tra\nđơn của khách, chờ TT;
+  if (Hợp lệ?) then (Không)
+    |Giao diện (Next.js)|
+    :Báo lỗi\n401 / 404 / 409 / 400;
+    |Khách hàng|
+    kill
+  else (Có)
+    |API (NestJS + PostgreSQL)|
+    if (Idempotency-Key\nđã tồn tại?) then (Có)
+      |Giao diện (Next.js)|
+      :Hiển thị kết quả đã lưu\n(replayed = true);
+      |Khách hàng|
+      stop
+    else (Không)
+      |API (NestJS + PostgreSQL)|
+      :Lưu Payment PROCESSING\n(key duy nhất), gọi cổng;
+
+      |Cổng thanh toán|
+      :Xử lý giao dịch\nmô phỏng Ví / Thẻ;
+
+      |API (NestJS + PostgreSQL)|
+      if (Cổng trả\nthành công?) then (Có)
+        :Transaction: Payment SUCCESS,\nOrder PAID, cộng điểm, ghi log;
+        |Giao diện (Next.js)|
+        :Xóa giỏ hàng, hiển thị\nthanh toán thành công;
+        |Khách hàng|
+        :Nhận xác nhận\n(mã đơn, mã giao dịch);
+        stop
+      else (Không)
+        |API (NestJS + PostgreSQL)|
+        :Payment FAILED,\nOrder PAYMENT_FAILED, ghi log;
+        |Giao diện (Next.js)|
+        :Hiển thị lỗi, nút\nThử lại / Hủy đơn;
+      endif
+    endif
+  endif
+
+  |Khách hàng|
+repeat while (Thử lại?) is (Có) not (Không)
+
+|API (NestJS + PostgreSQL)|
+:Hủy đơn: CANCELLED, hoàn\ntồn kho, mã giảm giá, điểm;
+stop
+
+@enduml

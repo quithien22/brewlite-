@@ -1,0 +1,121 @@
+@startuml usecase-tong-quat
+' ============================================================
+' BrewLite – Use case tổng quát (UC-01 … UC-07)
+' ============================================================
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam ActorBorderColor Black
+skinparam usecase {
+  BackgroundColor White
+  BorderColor Black
+}
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+}
+
+actor "Khách hàng" as KH
+actor "Cổng thanh toán\n(mô phỏng)" as CTT
+actor "Nhân viên\npha chế" as NVPC
+actor "Quản lý" as QL
+
+rectangle "Hệ thống BrewLite" {
+
+  rectangle "UC-02 Tài khoản & xác thực" as G02 #white;line:gray;line.dotted {
+    usecase "Đăng ký" as DK
+    usecase "Đăng nhập" as DN
+    usecase "Đăng xuất" as DX
+    usecase "Xem hồ sơ &\nđiểm thưởng" as HS
+  }
+
+  rectangle "UC-03 Thực đơn & sản phẩm" as G03 #white;line:gray;line.dotted {
+    usecase "Xem menu" as MENU
+    usecase "Tìm kiếm /\nlọc danh mục" as TIMKIEM
+    usecase "Xem chi tiết\nsản phẩm" as CHITIET
+    usecase "Chọn size / topping /\nđường / đá" as CHON
+    usecase "Xem khuyến mãi\nđang chạy" as KM
+  }
+
+  rectangle "UC-04 Giỏ hàng" as G04 #white;line:gray;line.dotted {
+    usecase "Quản lý giỏ hàng" as GIO
+    usecase "Ghi chú cho đơn" as GHICHU
+  }
+
+  rectangle "UC-01 Đặt & thanh toán (trọng tâm)" as G01 #white;line:gray;line.dotted {
+    usecase "**Đặt và thanh toán**\n**đơn hàng**" as DAT #white;line.bold
+    usecase "Dùng điểm thưởng" as DIEM
+    usecase "Áp mã khuyến mãi" as MAKM
+    usecase "Kiểm tra &\ngiữ tồn kho" as TONKHO
+    usecase "Thanh toán không\ndùng tiền mặt" as TT
+    usecase "Cộng điểm thưởng" as CONGDIEM
+    usecase "Xử lý thanh toán\nthất bại" as TTLOI
+  }
+
+  rectangle "UC-05 Theo dõi đơn hàng" as G05 #white;line:gray;line.dotted {
+    usecase "Xem lịch sử đơn" as LSDON
+    usecase "Xem chi tiết &\ntheo dõi trạng thái" as THEODOI
+    usecase "Hủy đơn" as HUY
+  }
+
+  rectangle "UC-06 Xử lý đơn tại quầy" as G06 #white;line:gray;line.dotted {
+    usecase "Tiếp nhận đơn đặt hàng" as TIEPNHAN
+    usecase "Cập nhật trạng thái\nđơn hàng" as CAPNHATTT
+  }
+
+  rectangle "UC-07 Quản trị cửa hàng" as G07 #white;line:gray;line.dotted {
+    usecase "Cập nhật sản phẩm mới" as SPMOI
+    usecase "Cập nhật tồn kho" as CAPNHATKHO
+  }
+}
+
+' ---------- Khách hàng (association) ----------
+KH -- DK
+KH -- DN
+KH -- DX
+KH -- HS
+KH -- MENU
+KH -- KM
+KH -- GIO
+KH -[thickness=3]- DAT
+KH -- LSDON
+
+' ---------- Tác nhân khác ----------
+CTT  -- TT
+NVPC -- TIEPNHAN
+QL   -- SPMOI
+QL --|> NVPC
+
+' ---------- UC-03 Thực đơn & sản phẩm ----------
+TIMKIEM  .> MENU    : <<extend>>
+CHITIET  .> MENU    : <<extend>>
+CHON     .> CHITIET : <<extend>>
+
+' ---------- UC-04 Giỏ hàng ----------
+GHICHU .> GIO : <<extend>>
+
+' ---------- UC-01 Đặt & thanh toán ----------
+DIEM     .> DAT      : <<extend>>
+MAKM     .> DAT      : <<extend>>
+DAT      .> TONKHO   : <<include>>
+DAT      .> TT       : <<include>>
+DAT      .> DN       : <<include>>
+TT       .> CONGDIEM : <<include>>
+TTLOI    .> TT       : <<extend>>
+
+' ---------- UC-05 Theo dõi đơn hàng ----------
+THEODOI .> LSDON   : <<extend>>
+HUY     .> THEODOI : <<extend>>
+
+' ---------- UC-06 Xử lý đơn tại quầy ----------
+CAPNHATTT .> TIEPNHAN : <<extend>>
+TIEPNHAN  .> DN       : <<include>>
+TIEPNHAN  .> TT       : <<extend>>
+
+' ---------- UC-07 Quản trị cửa hàng ----------
+CAPNHATKHO .> SPMOI    : <<extend>>
+SPMOI      .> DN       : <<include>>
+CAPNHATKHO .> TONKHO   : <<extend>>
+
+@enduml

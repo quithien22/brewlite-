@@ -1,0 +1,77 @@
+@startuml activity-01a-tu-xem-menu-den-tao-don-hang
+' ============================================================
+' BrewLite – Activity-01a: Từ xem menu đến tạo đơn hàng
+' Lưu ý: dấu ";" là ký tự kết thúc action của PlantUML nên trong
+' nhãn được thay bằng dấu ",".
+' ============================================================
+title Activity-01a – Từ xem menu đến tạo đơn hàng
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam ConditionStyle InsideDiamond
+skinparam activity {
+  BackgroundColor White
+  BorderColor Black
+  DiamondBackgroundColor White
+  DiamondBorderColor Black
+}
+skinparam swimlane {
+  BorderColor Black
+}
+
+|Khách hàng|
+start
+:Xem menu, chọn đồ uống,\nsize, topping, đường, đá;
+
+|Giao diện (Next.js)|
+:Hiển thị menu, giá\ntheo tùy chọn;
+
+if (Còn hàng?) then (Có)
+  |Khách hàng|
+  :Thêm vào giỏ hàng\n(lưu trên trình duyệt);
+  :Nhấn "Đặt hàng";
+
+  |Giao diện (Next.js)|
+  if (Đã đăng nhập?) then (Không)
+    |API (NestJS + PostgreSQL)|
+    :Đăng nhập: xác thực,\ncấp JWT (UC-02);
+  else (Có)
+  endif
+
+  |Khách hàng|
+  :Xem lại đơn, nhập mã / dùng điểm /\nghi chú, "Xác nhận đặt hàng";
+
+  |Giao diện (Next.js)|
+  :POST /orders\n(Bearer JWT);
+
+  |API (NestJS + PostgreSQL)|
+  :Xác thực JWT,\nvalidate dữ liệu;
+  if (Hợp lệ?) then (Không)
+    |Giao diện (Next.js)|
+    :Hiển thị lỗi\n401 / 400;
+    |Khách hàng|
+    kill
+  else (Có)
+    |API (NestJS + PostgreSQL)|
+    :BEGIN, đọc sản phẩm, tồn kho,\nmã, điểm, tính lại giá;
+    if (Đủ hàng, mã và\nđiểm hợp lệ?) then (Không)
+      |Giao diện (Next.js)|
+      :ROLLBACK, báo hết hàng /\nmã không hợp lệ;
+      |Khách hàng|
+      kill
+    else (Có)
+      |API (NestJS + PostgreSQL)|
+      :Trừ tồn kho, tạo Order PENDING,\nghi nhật ký, COMMIT;
+      |Giao diện (Next.js)|
+      :Nhận 201 Created, chuyển\nsang trang thanh toán;
+      note right: Đơn PENDING – tiếp tục: Activity-01b
+      stop
+    endif
+  endif
+else (Không)
+  |Giao diện (Next.js)|
+  :Báo hết hàng,\nkhóa nút Thêm;
+  kill
+endif
+
+@enduml

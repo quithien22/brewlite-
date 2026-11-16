@@ -2,17 +2,48 @@
 title Sequence-01a – Tạo đơn hàng (POST /orders)
 skinparam shadowing false
 skinparam defaultFontName "Liberation Sans"
+skinparam backgroundColor White
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 skinparam ParticipantPadding 20
 skinparam BoxPadding 10
+' Đường sinh tồn là nét đứt
+skinparam lifelineStrategy nosolid
+' Actor / participant / đường kẻ màu đen
+skinparam sequence {
+  ArrowColor Black
+  ArrowFontColor Black
+  LifeLineBorderColor Black
+  LifeLineBackgroundColor White
+  ActorBorderColor Black
+  ActorBackgroundColor White
+  ActorFontColor Black
+  ParticipantBorderColor Black
+  ParticipantBackgroundColor White
+  ParticipantFontColor Black
+  GroupBorderColor Black
+  GroupBackgroundColor White
+  GroupFontColor Black
+}
+skinparam actor {
+  BorderColor Black
+  BackgroundColor White
+  FontColor Black
+}
+skinparam database {
+  BorderColor Black
+  BackgroundColor White
+  FontColor Black
+}
 
 actor "Khách hàng" as C
 participant "Next.js UI" as UI
 participant "NestJS API" as API
 database "PostgreSQL" as DB
 
+activate C
 C -> UI : Nhấn "Đặt hàng" từ giỏ hàng
+activate UI
 UI -> UI : Kiểm tra có JWT trong phiên
 opt Chưa đăng nhập
   UI --> C : Chuyển sang trang đăng nhập (UC-02)
@@ -20,6 +51,7 @@ end
 
 C -> UI : Xem lại đơn, nhập mã, điểm, ghi chú, xác nhận
 UI -> API : POST /orders\n(Bearer JWT, items, couponCode, pointsToUse, note)
+activate API
 API -> API : Xác thực JWT, validate DTO (whitelist)
 
 alt JWT sai / hết hạn hoặc dữ liệu không hợp lệ
@@ -27,6 +59,7 @@ alt JWT sai / hết hạn hoặc dữ liệu không hợp lệ
   UI --> C : Hiển thị lỗi (tiếng Việt)
 else Hợp lệ
   API -> DB : BEGIN transaction
+  activate DB
   API -> DB : Đọc sản phẩm, topping, tính lại giá,\nkiểm tra mã, điểm
   DB --> API : Giá, tồn kho, mã, điểm
   alt Thiếu hàng hoặc mã / điểm không hợp lệ
@@ -38,8 +71,12 @@ else Hợp lệ
     API -> DB : INSERT Order PENDING, OrderItem, log;\nusedCount + 1; LoyaltyTransaction REDEEM
     API -> DB : COMMIT
     DB --> API : OK
+    deactivate DB
     API --> UI : 201 Created (orderId, subtotal, discount, total)
+    deactivate API
     UI --> C : Hiển thị trang thanh toán (tổng tiền)
+    deactivate UI
+    deactivate C
   end
 end
 @enduml
