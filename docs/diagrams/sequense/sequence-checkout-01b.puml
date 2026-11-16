@@ -2,9 +2,39 @@
 title Sequence-01b – Thanh toán đơn hàng (POST /payments)
 skinparam shadowing false
 skinparam defaultFontName "Liberation Sans"
+skinparam backgroundColor White
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+' Đường sinh tồn là nét đứt
+skinparam lifelineStrategy nosolid
+' Actor / participant / đường kẻ màu đen
+skinparam sequence {
+  ArrowColor Black
+  ArrowFontColor Black
+  LifeLineBorderColor Black
+  LifeLineBackgroundColor White
+  ActorBorderColor Black
+  ActorBackgroundColor White
+  ActorFontColor Black
+  ParticipantBorderColor Black
+  ParticipantBackgroundColor White
+  ParticipantFontColor Black
+  GroupBorderColor Black
+  GroupBackgroundColor White
+  GroupFontColor Black
+}
+skinparam actor {
+  BorderColor Black
+  BackgroundColor White
+  FontColor Black
+}
+skinparam database {
+  BorderColor Black
+  BackgroundColor White
+  FontColor Black
+}
 
 actor "Khách hàng" as C
 participant "Next.js UI" as UI
@@ -12,9 +42,12 @@ participant "NestJS API" as API
 database "PostgreSQL" as DB
 participant "Cổng thanh toán" as PG
 
+activate C
 C -> UI : Chọn Ví / Thẻ, nhấn "Thanh toán"
+activate UI
 UI -> UI : Sinh Idempotency-Key (UUID)\ncho lần thanh toán này
 UI -> API : POST /payments\n(JWT, Idempotency-Key, orderId, method)
+activate API
 API -> API : Xác thực JWT, validate\n(method, độ dài key 8-100)
 
 alt JWT sai hoặc dữ liệu không hợp lệ
@@ -22,6 +55,7 @@ alt JWT sai hoặc dữ liệu không hợp lệ
   UI --> C : Hiển thị lỗi
 else Hợp lệ
   API -> DB : Tìm Payment theo Idempotency-Key
+  activate DB
   alt Key đã tồn tại (client gửi lại)
     DB --> API : Payment đã lưu
     API --> UI : 200 kết quả cũ (replayed = true), không gọi cổng
@@ -30,6 +64,7 @@ else Hợp lệ
     API -> DB : Kiểm tra đơn của khách,\ntrạng thái PENDING / PAYMENT_FAILED
     API -> DB : INSERT Payment PROCESSING (unique key)
     API -> PG : charge(orderId, amount từ CSDL, method, key)
+    activate PG
     alt Thanh toán thành công
       PG --> API : SUCCESS + transactionId
       API -> DB : BEGIN; Payment SUCCESS; Order PAID; log;\nLoyaltyTransaction EARN; COMMIT
@@ -41,6 +76,11 @@ else Hợp lệ
       API --> UI : 200 success = false (failureReason)
       UI --> C : Hiển thị lỗi, nút "Thử lại" (key mới) / "Hủy đơn"
     end
+    deactivate PG
   end
+  deactivate DB
 end
+deactivate API
+deactivate UI
+deactivate C
 @enduml

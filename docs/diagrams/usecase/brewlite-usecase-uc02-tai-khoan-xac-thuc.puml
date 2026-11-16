@@ -1,0 +1,65 @@
+@startuml brewlite-usecase-uc02-tai-khoan-xac-thuc
+' ============================================================
+' BrewLite – Use case chi tiết UC-02: Tài khoản & xác thực
+' ============================================================
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowColor Black
+skinparam ActorBorderColor Black
+skinparam usecase {
+  BackgroundColor White
+  BorderColor Black
+}
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+}
+
+actor "Khách hàng" as KH
+
+rectangle "Hệ thống BrewLite – UC-02 Tài khoản & xác thực" {
+
+  ' --- Đăng ký ---
+  usecase "Đăng ký" as DK
+  usecase "Kiểm tra trùng email / SĐT" as DK_TRUNG
+  usecase "Tạo tài khoản & khởi tạo điểm\nthưởng" as DK_TAO
+
+  ' --- Đăng nhập ---
+  usecase "Đăng nhập" as DN
+  usecase "Xác thực thông tin đăng nhập" as DN_XT
+  usecase "Quên mật khẩu / đặt lại" as DN_QMK
+  usecase "Xử lý đăng nhập sai (khóa tạm)" as DN_SAI
+
+  ' --- Hồ sơ & điểm thưởng ---
+  usecase "Xem hồ sơ & điểm thưởng" as HS
+  usecase "Cập nhật hồ sơ" as HS_CN
+  usecase "Đổi mật khẩu" as HS_MK
+  usecase "Xem lịch sử điểm thưởng" as HS_LS
+
+  ' --- Đăng xuất ---
+  usecase "Đăng xuất" as DX
+}
+
+' ---------- Association ----------
+KH -- DK
+KH -- DN
+KH -- HS
+KH -- DX
+
+' ---------- Đăng ký ----------
+DK .> DK_TRUNG : <<include>>
+DK .> DK_TAO   : <<include>>
+
+' ---------- Đăng nhập ----------
+DN     .> DN_XT : <<include>>
+DN_QMK .> DN    : <<extend>>
+DN_SAI .> DN    : <<extend>>
+
+' ---------- Hồ sơ & điểm thưởng ----------
+HS    .> DN    : <<include>>
+HS_CN .> HS    : <<extend>>
+HS_MK .> HS    : <<extend>>
+HS    .> HS_LS : <<include>>
+
+@enduml
