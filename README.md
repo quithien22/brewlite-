@@ -26,7 +26,7 @@ MVP đi từ **chọn sản phẩm → giỏ hàng → thanh toán → xác nh�
 | Frontend (`apps/web`) | Next.js (App Router), React, TypeScript, Tailwind CSS, Zustand |
 | Backend (`apps/api`) | NestJS, Passport JWT, class-validator, bcryptjs |
 | Cơ sở dữ liệu | PostgreSQL 16, Prisma (migration + seed) |
-| Kiểm thử | Jest + ts-jest (unit), `node:test` (E2E) |
+| Kiểm thử | Postman, `node:test` (E2E) |
 | Hạ tầng | Docker, Docker Compose, GitHub Actions; kế hoạch triển khai: Render + GHCR |
 
 ## Kiến trúc
@@ -316,6 +316,7 @@ Chạy E2E (cần API + DB đã chạy và đã seed): `node tests/e2e/smoke.mjs
 | TypeScript báo thiếu `REFUNDED` / `REVOKE` | Chạy `npx prisma migrate deploy` rồi `npx prisma generate` trong `apps/api`. |
 
  
- 
+
+Danh sách khoảng trống chi tiết nằm ở mục 6 của `docs/traceability-matrix.md`.
 
 > Tài khoản demo có mật khẩu công khai và `MOCK_PAYMENT_ALLOW_FAILURE=true` chỉ dành cho demo.
