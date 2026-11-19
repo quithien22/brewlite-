@@ -1,70 +1,147 @@
 # Triển khai BrewLite lên AWS EC2 (deployment.md)
 
-Tài liệu này hướng dẫn triển khai BrewLite (web Next.js + API NestJS + PostgreSQL) trên **một VPS AWS EC2** bằng **Docker Compose**, HTTPS tự động bằng **Caddy** (Let's Encrypt).
+Tài liệu này mô tả cách triển khai production theo **Task 3.2** của `task1-3-MVP.docx` và **ADR-011** (`011-aws-ec2-platform.md`): **AWS EC2 (VPS, ap-southeast-1)** chạy **Docker Compose**, HTTPS bằng **nginx + Let's Encrypt**, image build ở **GitHub Actions** và lưu ở **GHCR**, triển khai bằng **SSH** từ pipeline CD.
 
-> Bản triển khai trên Render (theo [ADR-011](architecture/adr/011-render-platform.md)) được giữ lại ở [deployment-render.md](deployment-render.md). ADR-011 đã ghi VPS là phương án dự phòng, nên nên bổ sung `ADR-012-aws-ec2.md` ghi lại quyết định chuyển sang EC2.
+> Bản Render cũ được giữ ở [deployment-render.md](deployment-render.md) để tham khảo, không còn là nền tảng chính thức.
+>
+> **Quy ước:** `<...>` là giá trị bạn tự điền. Lệnh ghi rõ chạy trên **server** hay **máy local**. Cột "Trạng thái": ✅ đã có trong repo, ⬜ chưa làm.
 
-> **Quy ước:** chỗ có `<...>` là giá trị bạn tự điền. Lệnh chạy trên **server** hay **máy local** được ghi rõ ở từng bước.
+## 1. URL bàn giao
 
-## 1. Tổng quan
+| Thành phần | URL | Trạng thái |
+|---|---|---|
+| Frontend (HTTPS) | `https://app.<domain>` | ⬜ |
+| API | `https://api.<domain>` | ⬜ |
+| Health check | `https://api.<domain>/health` → `{"status":"ok","database":"up",...}` | ⬜ |
+| Repository | `https://github.com/quithien22/brewlite-` | ✅ |
+| Release | `https://github.com/quithien22/brewlite-/releases/tag/v<X.Y.Z>` | ⬜ |
+| Video demo | `<link>` | ⬜ |
+
+Tài khoản demo: `demo@brewlite.vn` / `Demo1234`. Mã khuyến mãi: `CHAO10`, `GIAM15K`, `COMBO20`.
+
+## 2. Kiến trúc triển khai
 
 ```mermaid
 flowchart LR
-  U[Trình duyệt] -- HTTPS 443 --> C
-  subgraph EC2["AWS EC2 (Ubuntu 24.04, Elastic IP)"]
-    C[caddy :80/:443<br/>TLS + reverse proxy]
-    W[frontend<br/>Next.js :3000]
-    A[backend<br/>NestJS :4000]
-    D[(postgres:16<br/>volume brewlite-db)]
-    C -- "/" --> W
-    C -- "/api/* (bỏ tiền tố /api)" --> A
-    A -- 5432, mạng nội bộ Docker --> D
+  U[Trình duyệt / PWA] -- HTTPS 443 --> N
+  subgraph EC2["AWS EC2 ap-southeast-1 (Elastic IP, Security Group 80/443/22)"]
+    N[nginx<br/>TLS Let's Encrypt]
+    W[web<br/>Next.js :3000]
+    A[api<br/>NestJS :4000]
+    D[(db<br/>PostgreSQL 16<br/>volume pgdata, EBS gp3)]
+    N -- "app.domain" --> W
+    N -- "api.domain" --> A
+    A -- "5432, mạng nội bộ Docker" --> D
   end
+  R53[Route 53<br/>app / api → Elastic IP] -.DNS.-> U
+  subgraph GH["GitHub"]
+    CI[Actions ci.yml / cd.yml]
+    G[(GHCR<br/>brewlite-api, brewlite-web)]
+  end
+  CI -- push image tag SHA / vX.Y.Z --> G
+  CI -- "SSH: deploy.sh" --> EC2
+  G -- docker compose pull --> EC2
 ```
 
-Quyết định thiết kế:
+Điểm chính:
 
-- **Một domain, một chứng chỉ:** web ở `https://<domain>/`, API ở `https://<domain>/api/...`. Caddy bỏ tiền tố `/api` trước khi chuyển cho NestJS (API không có global prefix: `/health`, `/products`, ...). Trình duyệt gọi API cùng origin nên không vướng CORS.
-- **Chỉ Caddy mở cổng ra Internet** (80, 443). `frontend`, `backend`, `db` không publish cổng; chúng chỉ thấy nhau trong mạng Docker.
-- `NEXT_PUBLIC_API_URL` được **nhúng vào bundle lúc build** (build arg). Đổi domain thì phải build lại image `frontend`.
-- Không dùng thẳng `docker-compose.yml` của repo cho production vì file đó mở cổng DB (5433), API (4000), web (3000) và có mật khẩu mặc định. Production dùng `docker-compose.prod.yml` ở mục 6.
+- Hai tên miền: `app.<domain>` (web) và `api.<domain>` (API), cùng trỏ về một Elastic IP. nginx tách theo `server_name`. Trình duyệt gọi API trực tiếp từ origin khác nên API phải bật CORS đúng `FRONTEND_URL`.
+- Chỉ nginx publish cổng 80 và 443. `web`, `api`, `db` chỉ nằm trong mạng Docker Compose; cổng 5432 không ra host và Security Group cũng đóng (NFR-14).
+- Image **build trong CI, không build trên server**. Server chỉ `pull` rồi `up -d`.
+- `NEXT_PUBLIC_API_URL` được nhúng vào bundle web lúc build (build arg trong CI). Đổi domain API thì phải build lại image web.
 
-## 2. Chuẩn bị
+### Truy vết thành phần → kiến trúc → mã nguồn (khớp bảng Task 3.2)
 
-| Cần có | Ghi chú |
+| Thành phần trong sơ đồ | Thành phần kiến trúc | Mã nguồn / cấu hình | Trạng thái |
+|---|---|---|---|
+| Container `web` (brewlite-web) | Web App | `apps/web`, `apps/web/Dockerfile` | ✅ |
+| Container `api` (brewlite-api) | API + module payments/gateway | `apps/api`, `apps/api/Dockerfile` | ✅ |
+| Container `db` (PostgreSQL 16, volume `pgdata` trên EBS) | PostgreSQL | `apps/api/prisma` (schema, migrations, seed) | ✅ |
+| nginx (TLS Let's Encrypt) | Điểm vào HTTPS (NFR-14) | `nginx/default.conf.template`, `docker-compose.prod.yml` | ⬜ |
+| EC2 + Docker Compose production | Môi trường production | `docker-compose.prod.yml`, `deploy/deploy.sh`, `docs/deployment.md` | ⬜ |
+| VPC, Security Group, Elastic IP, Route 53 | Mạng và truy cập | cấu hình AWS, ghi lại ở mục 4 | ⬜ |
+| GitHub Actions `ci.yml` / `cd.yml` | CI/CD (NFR-15) | `.github/workflows/` (hiện CI tên `node.js.yml`) | ⬜ |
+| GHCR | Kho image (ADR-010) | tag `vX.Y.Z` hoặc `sha-<7 ký tự>` | ⬜ |
+| `GET /health` | Module health (NFR-17) | `apps/api/src/health` | ✅ |
+| Env / secret | Module config (NFR-07) | `.env` trên EC2 (`chmod 600`), GitHub Secrets | ⬜ |
+
+### Ranh giới môi trường
+
+| Môi trường | Cách chạy |
 |---|---|
-| Tài khoản AWS | Chọn region gần người dùng, ví dụ **ap-southeast-1 (Singapore)** |
-| Key pair (.pem) | Tạo lúc khởi chạy instance, giữ an toàn, không commit |
-| Domain (khuyến nghị) | Trỏ bản ghi **A** về Elastic IP. Chưa có domain thì dùng `<ip-viết-bằng-dấu-gạch>.sslip.io`, ví dụ IP `13.212.10.20` → `13-212-10-20.sslip.io` (xem lưu ý ở mục 5) |
-| Quyền đọc repo | Repo `https://github.com/quithien22/brewlite-`. Nếu private, dùng deploy key hoặc Personal Access Token (read-only) |
+| Local | `docker compose up --build` (`docker-compose.yml`, cấu hình qua `.env` không commit) |
+| CI | PR: cài đặt → lint → test → build, kèm job `e2e` với Postgres tạm |
+| Production | EC2 + `docker-compose.prod.yml`; CD chạy khi push tag `v*.*.*` hoặc merge vào `main` |
 
-## 3. Tạo EC2
+> `docker-compose.yml` hiện tại **không dùng cho production**: nó publish cổng DB (5433), API (4000), web (3000) và có mật khẩu mặc định.
 
-Trong AWS Console → EC2 → **Launch instance**:
+## 3. Biến môi trường và secret
+
+Chỉ commit `.env.example`. Không commit giá trị thật.
+
+**File `~/brewlite/.env` trên EC2** (`chmod 600`):
+
+| Biến | Dùng cho | Giá trị |
+|---|---|---|
+| `APP_DOMAIN` | nginx, API (CORS) | `app.<domain>` (không có `https://`) |
+| `API_DOMAIN` | nginx, smoke test | `api.<domain>` |
+| `POSTGRES_USER`, `POSTGRES_DB` | db, api | `brewlite` |
+| `POSTGRES_PASSWORD` | db, api | `openssl rand -hex 24` (hex để không có ký tự đặc biệt làm hỏng `DATABASE_URL`) |
+| `JWT_SECRET` | api | `openssl rand -base64 48`; không dùng giá trị mặc định trong repo |
+| `JWT_EXPIRES_IN` | api | `7d` hoặc ngắn hơn |
+| `ORDER_EXPIRE_MINUTES`, `REFUND_WINDOW_MINUTES` | api | `15`, `5` |
+| `MOCK_PAYMENT_ALLOW_FAILURE` | api | `true` nếu cần demo thanh toán lỗi, ngược lại `false` |
+| `IMAGE_TAG` | compose | do `deploy.sh` ghi sau mỗi lần deploy thành công |
+
+**GitHub (Settings → Secrets and variables → Actions):**
+
+| Tên | Loại | Dùng cho |
+|---|---|---|
+| `EC2_HOST` | Secret | Elastic IP hoặc `api.<domain>` |
+| `EC2_USER` | Secret | `ubuntu` |
+| `EC2_SSH_KEY` | Secret | private key riêng cho CD (không dùng chung key cá nhân) |
+| `GITHUB_TOKEN` | có sẵn | push image lên GHCR; server dùng để `docker login` lúc pull |
+| `PROD_API_URL` | Variable | `https://api.<domain>` → build arg `NEXT_PUBLIC_API_URL` |
+| `PROD_ALLOW_MOCK_FAILURE` | Variable | `true`/`false` → build arg `NEXT_PUBLIC_ALLOW_MOCK_FAILURE`, phải khớp `MOCK_PAYMENT_ALLOW_FAILURE` |
+
+Quy tắc: không `echo` secret trong workflow; không bật `set -x` ở bước dùng secret; `.env` nằm trong `.gitignore` và `.dockerignore`.
+
+## 4. Chuẩn bị hạ tầng AWS
+
+Region **ap-southeast-1 (Singapore)**.
+
+**4.1 Instance**
 
 | Mục | Giá trị |
 |---|---|
 | AMI | Ubuntu Server 24.04 LTS |
-| Loại máy | **t3.small (2 GB RAM)** trở lên. Tránh t3.micro (1 GB): build Next.js dễ bị hết bộ nhớ |
-| Storage | gp3, **20–30 GB** (image Docker và build cache tốn dung lượng) |
-| Key pair | chọn key pair đã tạo |
-| Security group | xem bảng dưới |
+| Loại máy | `t3.small` (2 GB RAM) cho 4 container (nginx, web, api, db). Vì image build ở CI nên server không cần RAM để build, nhưng vẫn nên có swap |
+| Storage | EBS **gp3 20 GB** trở lên (chứa image Docker và volume `pgdata`) |
+| Key pair | tạo mới, lưu `.pem` an toàn |
 
-**Security group (inbound):**
+**4.2 Security Group (inbound)**
 
 | Cổng | Nguồn | Mục đích |
 |---|---|---|
-| 22 (SSH) | **IP của bạn** (`My IP`), không để `0.0.0.0/0` | quản trị |
-| 80 (HTTP) | `0.0.0.0/0` | Caddy xin chứng chỉ và chuyển sang HTTPS |
-| 443 (HTTPS) | `0.0.0.0/0` | truy cập web và API |
+| 80 | `0.0.0.0/0` | chuyển hướng sang HTTPS, Let's Encrypt |
+| 443 | `0.0.0.0/0` | web và API |
+| 22 | xem lưu ý dưới | quản trị và CD |
 
-**Không mở** 3000, 4000, 5432. Outbound để mặc định.
+Không mở 3000, 4000, 5432.
 
-**Elastic IP:** EC2 → Elastic IPs → Allocate → Associate với instance. Nếu không làm, IP công khai đổi mỗi lần stop/start và domain/chứng chỉ sẽ hỏng.
+> **Lưu ý về cổng 22:** docx ghi "22 từ IP của nhóm", nhưng CD cần SSH từ GitHub Actions, mà IP của runner thay đổi liên tục nên bị chặn. Chọn một trong hai cách và sửa docx cho khớp:
+> - **(a) Đơn giản:** mở 22 cho `0.0.0.0/0`, chỉ cho đăng nhập bằng key (Ubuntu EC2 mặc định `PasswordAuthentication no`), dùng key riêng cho CD.
+> - **(b) Chặt hơn:** giữ 22 cho IP nhóm; trong workflow dùng AWS OIDC role để tạm thêm IP của runner vào Security Group rồi xóa sau khi deploy. Cần thêm bước cấu hình AWS cho GitHub.
 
-Nếu có domain, tạo bản ghi `A`: `<domain>` → Elastic IP, rồi chờ DNS cập nhật (`nslookup <domain>`).
+**4.3 Elastic IP:** Allocate rồi Associate với instance. Không có Elastic IP thì IP đổi mỗi lần stop/start, DNS và chứng chỉ hỏng.
 
-## 4. Chuẩn bị server
+**4.4 DNS (Route 53):** tạo 2 bản ghi `A`: `app.<domain>` và `api.<domain>` → Elastic IP. Chờ DNS lan truyền (`nslookup app.<domain>`).
+
+Chưa có domain: dùng `app.<ip-gạch>.sslip.io` và `api.<ip-gạch>.sslip.io` (IP `13.212.10.20` → `13-212-10-20`). Dịch vụ dùng chung nên Let's Encrypt có thể giới hạn tần suất cấp chứng chỉ; bản nộp bài nên dùng domain riêng.
+
+**4.5 Chi phí:** AWS tính phí EC2, EBS, snapshot, địa chỉ IPv4 công khai và Route 53. Đặt **AWS Budgets** với cảnh báo email ngay từ đầu (rủi ro "hết credit / phát sinh chi phí" trong docx).
+
+## 5. Chuẩn bị server (làm một lần)
 
 **Chạy trên máy local:**
 
@@ -76,261 +153,452 @@ ssh -i brewlite-key.pem ubuntu@<ELASTIC_IP>
 **Chạy trên server:**
 
 ```bash
-# 4.1 Cập nhật hệ thống
+# 5.1 Cập nhật và cài Docker Engine + Compose plugin
 sudo apt-get update && sudo apt-get -y upgrade
-
-# 4.2 Cài Docker Engine + Compose plugin
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker ubuntu
-exit   # đăng xuất rồi SSH lại để nhóm docker có hiệu lực
+exit    # SSH lại để nhóm docker có hiệu lực
 
-# 4.3 Tạo swap 2 GB (đệm cho lúc build Next.js)
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
+# 5.2 Swap 2 GB
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 5.3 Thư mục triển khai
+mkdir -p ~/brewlite
 ```
 
-Kiểm tra: `docker --version`, `docker compose version`, `free -h` (thấy swap 2 GB).
-
-## 5. Lấy mã nguồn và cấu hình
-
-**Chạy trên server:**
+**5.4 Khóa SSH cho CD.** Trên máy local tạo cặp khóa riêng, thêm public key vào server, đặt private key vào GitHub Secret `EC2_SSH_KEY`:
 
 ```bash
-git clone https://github.com/quithien22/brewlite-.git brewlite
-cd brewlite
-git checkout main          # hoặc tag ổn định, ví dụ: git checkout v1.0.0
+ssh-keygen -t ed25519 -f brewlite-deploy -N "" -C "brewlite-cd"
+# thêm brewlite-deploy.pub vào ~/.ssh/authorized_keys trên server
+# dán nội dung file brewlite-deploy (private) vào secret EC2_SSH_KEY, rồi xóa file khỏi máy
 ```
 
-Repo private: dùng `git clone https://<TOKEN>@github.com/quithien22/brewlite-.git brewlite` với token chỉ có quyền đọc, hoặc cấu hình deploy key. Sau khi clone xong, chạy `git remote set-url origin https://github.com/quithien22/brewlite-.git` để token không nằm lại trong `.git/config`.
-
-Tạo file `.env` ở gốc repo (file này **không commit**):
+**5.5 Chứng chỉ Let's Encrypt (lấy trước khi chạy stack, cổng 80 phải đang trống):**
 
 ```bash
-cat > .env <<EOF
-# Domain hoặc <ip-gach>.sslip.io, KHÔNG có https://
-SITE_ADDRESS=<domain>
+sudo apt-get install -y certbot
+sudo certbot certonly --standalone --cert-name brewlite \
+  -d app.<domain> -d api.<domain> -m <email> --agree-tos -n
 
+# Gia hạn dùng chế độ standalone nên cần tạm dừng nginx (chiếm cổng 80) trong lúc gia hạn
+sudo tee /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh >/dev/null <<'EOF'
+#!/bin/sh
+docker stop brewlite-nginx || true
+EOF
+sudo tee /etc/letsencrypt/renewal-hooks/post/start-nginx.sh >/dev/null <<'EOF'
+#!/bin/sh
+docker start brewlite-nginx || true
+EOF
+sudo chmod +x /etc/letsencrypt/renewal-hooks/pre/stop-nginx.sh /etc/letsencrypt/renewal-hooks/post/start-nginx.sh
+sudo certbot renew --dry-run     # phải báo thành công
+```
+
+Gói `certbot` của Ubuntu tự cài timer gia hạn (`systemctl list-timers | grep certbot`). Mỗi lần gia hạn nginx dừng vài giây.
+
+**5.6 Tạo `.env`:**
+
+```bash
+cat > ~/brewlite/.env <<EOF
+APP_DOMAIN=app.<domain>
+API_DOMAIN=api.<domain>
 POSTGRES_USER=brewlite
 POSTGRES_DB=brewlite
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
-
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 JWT_EXPIRES_IN=7d
-
 ORDER_EXPIRE_MINUTES=15
 REFUND_WINDOW_MINUTES=5
-
-# true nếu muốn demo thanh toán lỗi trên production, ngược lại false. Hai biến phải khớp nhau.
 MOCK_PAYMENT_ALLOW_FAILURE=false
-NEXT_PUBLIC_ALLOW_MOCK_FAILURE=false
 EOF
-chmod 600 .env
+chmod 600 ~/brewlite/.env
 ```
 
-Lưu ý: dùng `openssl rand -hex` cho mật khẩu DB để không có ký tự đặc biệt làm hỏng `DATABASE_URL`. Nếu tự đặt mật khẩu, tránh các ký tự `@ : / ? # %`.
+## 6. Tệp cấu hình trong repo (cần tạo và commit ⬜)
 
-| Biến | Dịch vụ | Ý nghĩa |
-|---|---|---|
-| `SITE_ADDRESS` | caddy, backend (CORS), frontend (build) | domain công khai |
-| `POSTGRES_*` | db, backend | tài khoản database |
-| `JWT_SECRET` | backend | bắt buộc khác giá trị mặc định trong repo |
-| `FRONTEND_URL` | backend | compose tự đặt `https://<SITE_ADDRESS>` |
-| `NEXT_PUBLIC_API_URL` | frontend (build arg) | compose tự đặt `https://<SITE_ADDRESS>/api` |
-
-> **sslip.io:** dịch vụ dùng chung nên Let's Encrypt có thể giới hạn tần suất cấp chứng chỉ cho tên miền này. Caddy tự thử lại và có CA dự phòng (ZeroSSL), nhưng với bản chạy lâu dài hoặc nộp bài, nên dùng domain riêng.
-
-## 6. File cấu hình production
-
-Tạo hai file ở **gốc repo** và commit lên Git để server pull về (hoặc tạo trực tiếp trên server).
-
-**`Caddyfile`**
-
-```caddyfile
-{$SITE_ADDRESS} {
-	encode gzip
-
-	# /api/products -> backend nhận /products
-	handle_path /api/* {
-		reverse_proxy backend:4000
-	}
-
-	handle {
-		reverse_proxy frontend:3000
-	}
-}
-```
-
-**`docker-compose.prod.yml`**
+**`docker-compose.prod.yml`** (gốc repo):
 
 ```yaml
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-brewlite}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Thiếu POSTGRES_PASSWORD trong .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?thiếu POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-brewlite}
     volumes:
-      - brewlite-db:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brewlite} -d ${POSTGRES_DB:-brewlite}"]
       interval: 5s
       timeout: 5s
       retries: 10
-    # Không publish cổng: chỉ backend trong mạng Docker truy cập được
+    # không publish cổng 5432
 
-  backend:
-    build: ./apps/api
-    image: brewlite-api:${APP_VERSION:-latest}
+  api:
+    image: ghcr.io/quithien22/brewlite-api:${IMAGE_TAG:?thiếu IMAGE_TAG}
     restart: unless-stopped
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-brewlite}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-brewlite}?schema=public
-      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong .env}
+      JWT_SECRET: ${JWT_SECRET:?thiếu JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: "4000"
-      FRONTEND_URL: https://${SITE_ADDRESS:?Thiếu SITE_ADDRESS trong .env}
+      FRONTEND_URL: https://${APP_DOMAIN:?thiếu APP_DOMAIN}
       ORDER_EXPIRE_MINUTES: ${ORDER_EXPIRE_MINUTES:-15}
       REFUND_WINDOW_MINUTES: ${REFUND_WINDOW_MINUTES:-5}
       MOCK_PAYMENT_ALLOW_FAILURE: ${MOCK_PAYMENT_ALLOW_FAILURE:-false}
     expose:
       - "4000"
 
-  frontend:
-    build:
-      context: ./apps/web
-      args:
-        NEXT_PUBLIC_API_URL: https://${SITE_ADDRESS}/api
-        NEXT_PUBLIC_ALLOW_MOCK_FAILURE: ${NEXT_PUBLIC_ALLOW_MOCK_FAILURE:-false}
-    image: brewlite-web:${APP_VERSION:-latest}
+  web:
+    image: ghcr.io/quithien22/brewlite-web:${IMAGE_TAG:?thiếu IMAGE_TAG}
     restart: unless-stopped
+    logging: *logging
     depends_on:
-      - backend
+      - api
     expose:
       - "3000"
 
-  caddy:
-    image: caddy:2-alpine
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: brewlite-nginx
     restart: unless-stopped
+    logging: *logging
     depends_on:
-      - backend
-      - frontend
+      - api
+      - web
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS}
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      # chỉ thay APP_DOMAIN và API_DOMAIN, giữ nguyên $host, $request_uri...
+      NGINX_ENVSUBST_FILTER: "^(APP|API)_DOMAIN$$"
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data        # chứa chứng chỉ TLS, đừng xóa
-      - caddy-config:/config
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
 volumes:
-  brewlite-db:
-  caddy-data:
-  caddy-config:
+  pgdata:
 ```
 
-Đặt `image: brewlite-api:${APP_VERSION}` để mỗi lần deploy có một image gắn tag theo commit, phục vụ rollback ở mục 9.
+**`nginx/default.conf.template`**:
 
-## 7. Triển khai lần đầu
+```nginx
+# Phân giải tên qua DNS của Docker để nginx không giữ IP cũ khi container api/web được tạo lại
+resolver 127.0.0.11 valid=10s;
 
-**Chạy trên server, trong thư mục `brewlite`:**
+server {
+    listen 80;
+    server_name ${APP_DOMAIN} ${API_DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${APP_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/brewlite/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/brewlite/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location / {
+        set $web http://web:3000;
+        proxy_pass $web;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${API_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/brewlite/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/brewlite/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    client_max_body_size 1m;
+
+    location / {
+        set $api http://api:4000;
+        proxy_pass $api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**`deploy/deploy.sh`** (CD copy lên server và chạy; cũng dùng để rollback bằng tay):
 
 ```bash
-export APP_VERSION=$(git rev-parse --short HEAD)
-docker compose -f docker-compose.prod.yml up -d --build
+#!/usr/bin/env bash
+# Dùng: ./deploy.sh <image-tag>     ví dụ: ./deploy.sh v1.0.1  hoặc  ./deploy.sh sha-1a2b3c4
+# Tag được ghi vào .env CHỈ khi smoke test đạt, nên .env luôn giữ tag tốt gần nhất.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+NEW_TAG="${1:?usage: deploy.sh <image-tag>}"
+COMPOSE="docker compose -f docker-compose.prod.yml"
+PREV_TAG="$(grep -E '^IMAGE_TAG=' .env | cut -d= -f2 || true)"
+API_DOMAIN="$(grep -E '^API_DOMAIN=' .env | cut -d= -f2)"
+
+set_tag() {
+  if grep -q '^IMAGE_TAG=' .env; then sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$1|" .env
+  else echo "IMAGE_TAG=$1" >> .env; fi
+}
+
+smoke() {
+  for _ in $(seq 1 30); do
+    if curl -fsS "https://${API_DOMAIN}/health" >/dev/null \
+       && curl -fsS "https://${API_DOMAIN}/products" >/dev/null; then
+      return 0
+    fi
+    sleep 4
+  done
+  return 1
+}
+
+export IMAGE_TAG="$NEW_TAG"
+$COMPOSE pull
+$COMPOSE up -d --remove-orphans
+
+if smoke; then
+  set_tag "$NEW_TAG"
+  echo "Deploy $NEW_TAG thành công"
+  exit 0
+fi
+
+echo "Smoke test thất bại với $NEW_TAG" >&2
+$COMPOSE logs --tail=50 api >&2 || true
+if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$NEW_TAG" ]; then
+  echo "Rollback về $PREV_TAG" >&2
+  export IMAGE_TAG="$PREV_TAG"
+  $COMPOSE up -d --remove-orphans
+  smoke && echo "Đã rollback về $PREV_TAG" >&2 || echo "Rollback xong nhưng smoke test vẫn lỗi, cần kiểm tra thủ công" >&2
+fi
+exit 1
 ```
 
-Lần build đầu mất vài phút. Theo dõi:
+Script rollback ứng dụng (đổi `IMAGE_TAG` về tag trước), không rollback database (xem mục 10).
+
+## 7. Pipeline CI/CD
+
+### CI (`ci.yml`)
+Hiện là `.github/workflows/node.js.yml` ✅ (api, web, e2e; chạy ở PR và push `main`). Nên đổi tên thành `ci.yml` cho khớp docx và đặt `api`, `web`, `e2e` làm required status check trong branch protection của `main` ⬜.
+
+### CD (`.github/workflows/cd.yml` ⬜)
+Chạy khi push tag `v*.*.*` hoặc merge vào `main`:
+
+```
+quality (lint, test, build) → build & push GHCR → SSH vào EC2 chạy deploy.sh (pull, up -d, smoke test, tự rollback)
+```
+
+```yaml
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_API: ghcr.io/quithien22/brewlite-api
+  IMAGE_WEB: ghcr.io/quithien22/brewlite-web
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: API
+        working-directory: apps/api
+        run: |
+          npm ci
+          npx prisma generate
+          npm test
+          npm run build
+      - name: Web
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+  build:
+    needs: quality
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build và push API
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          push: true
+          tags: ${{ env.IMAGE_API }}:${{ steps.tag.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: Build và push Web
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          tags: ${{ env.IMAGE_WEB }}:${{ steps.tag.outputs.tag }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.PROD_API_URL }}
+            NEXT_PUBLIC_ALLOW_MOCK_FAILURE=${{ vars.PROD_ALLOW_MOCK_FAILURE }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      IMAGE_TAG: ${{ needs.build.outputs.tag }}
+      GH_ACTOR: ${{ github.actor }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cấu hình SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+      - name: Gửi cấu hình lên server
+        run: |
+          scp -r docker-compose.prod.yml nginx deploy/deploy.sh "$EC2_USER@$EC2_HOST:brewlite/"
+      - name: Đăng nhập GHCR trên server
+        run: |
+          printf '%s' "$GH_TOKEN" | ssh "$EC2_USER@$EC2_HOST" \
+            "docker login ghcr.io -u '$GH_ACTOR' --password-stdin"
+      - name: Deploy, smoke test, tự rollback nếu lỗi
+        run: |
+          ssh "$EC2_USER@$EC2_HOST" "chmod +x ~/brewlite/deploy.sh && ~/brewlite/deploy.sh '$IMAGE_TAG'"
+```
+
+Ghi chú:
+- `deploy.sh` thoát mã khác 0 khi smoke test lỗi, nên job đỏ và pipeline dừng; server đã tự quay về tag trước.
+- `ssh-keyscan` tin host key ở lần kết nối đầu của mỗi lần chạy. Muốn chặt hơn, lưu host key của EC2 vào một secret và ghi vào `known_hosts` thay vì quét.
+- Không dùng `:latest` làm nguồn rollback; chỉ dùng tag bất biến `vX.Y.Z` hoặc `sha-...`.
+- Workflow cũ `nextjs.yml` (GitHub Pages) không còn phù hợp vì web chạy trong container. Xóa file này và nhánh `production` nếu không cần ⬜.
+
+## 8. Triển khai lần đầu
+
+1. Hoàn tất mục 4 (AWS) và mục 5 (server, khóa SSH, chứng chỉ, `.env`).
+2. Đặt Secrets/Variables ở mục 3 trên GitHub; tạo environment `production`.
+3. Commit `docker-compose.prod.yml`, `nginx/default.conf.template`, `deploy/deploy.sh`, `cd.yml` vào `main`.
+4. Mở tab Actions, theo dõi workflow CD. Hoặc tạo release: `git tag v1.0.0 && git push origin v1.0.0`.
+5. Lần chạy đầu `deploy.sh` không có `PREV_TAG`, nên nếu smoke test lỗi sẽ không có gì để rollback; xem log bằng mục 12.
+6. Kiểm tra theo mục 9.
+
+Khi khởi động, container `api` tự chạy `prisma migrate deploy` (chỉ áp dụng migration đã có), rồi `prisma db seed` (idempotent), rồi chạy API (xem `apps/api/Dockerfile`).
+
+## 9. Kiểm tra sau triển khai
+
+**Máy local:**
 
 ```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f backend   # phải thấy migration chạy xong và "BrewLite API đang chạy"
-docker compose -f docker-compose.prod.yml logs caddy        # phải thấy chứng chỉ được cấp
+curl -fsS https://api.<domain>/health          # 200, "database":"up"
+curl -fsS https://api.<domain>/products | head
+API_URL=https://api.<domain> node tests/e2e/smoke.mjs
+curl -I http://app.<domain>                    # 301 sang https
+nc -zv -w 5 <ELASTIC_IP> 5432                  # phải thất bại
+nc -zv -w 5 <ELASTIC_IP> 4000                  # phải thất bại
+nc -zv -w 5 <ELASTIC_IP> 3000                  # phải thất bại
 ```
 
-Khi khởi động, `backend` tự chạy `prisma migrate deploy` (chỉ áp dụng migration đã có, không xóa dữ liệu) rồi `prisma db seed` (idempotent), rồi mới chạy API (xem `apps/api/Dockerfile`).
+Trình duyệt: mở `https://app.<domain>` (ổ khóa hợp lệ) → xem menu → đăng nhập tài khoản demo → đặt đơn → thanh toán → thấy màn hình xác nhận và đơn `PAID` trong lịch sử. Mở DevTools, không có lỗi CORS khi gọi `api.<domain>`.
 
-## 8. Kiểm tra sau triển khai
+Log không được chứa `JWT_SECRET`, mật khẩu DB hay token:
+`docker compose -f docker-compose.prod.yml logs | grep -i -E "secret|password"`.
 
-**Chạy trên máy local:**
+## 10. Rollback
 
-```bash
-curl -fsS https://<domain>/api/health         # 200, {"status":"ok","database":"up",...}
-curl -fsS https://<domain>/api/products | head
-API_URL=https://<domain>/api node tests/e2e/smoke.mjs
-```
+**Ứng dụng (api, web):** image tag bất biến nên chỉ cần deploy lại tag cũ. Hai cách:
 
-Trên trình duyệt: mở `https://<domain>` (có ổ khóa HTTPS) → xem menu → đăng nhập `demo@brewlite.vn` / `Demo1234` → đặt đơn → thanh toán → thấy màn hình xác nhận và đơn ở trạng thái `PAID`.
+- **Tự động:** `deploy.sh` tự quay về tag trước khi smoke test lỗi (xem mục 7).
+- **Thủ công**, trên server:
+  ```bash
+  cd ~/brewlite
+  docker images | grep brewlite               # xem các tag còn trên server
+  ./deploy.sh v1.0.0                          # hoặc sha-1a2b3c4; tag cũ được pull lại từ GHCR nếu đã bị dọn
+  ```
+  Hoặc chạy lại workflow CD cho commit/tag cũ.
 
-Kiểm tra bảo mật:
-
-```bash
-curl -I http://<domain>                         # chuyển hướng 308 sang https
-nc -zv <ELASTIC_IP> 5432                        # phải thất bại / timeout
-nc -zv <ELASTIC_IP> 4000                        # phải thất bại / timeout
-nc -zv <ELASTIC_IP> 3000                        # phải thất bại / timeout
-```
-
-Log không được chứa `JWT_SECRET`, mật khẩu DB hay token: `docker compose -f docker-compose.prod.yml logs | grep -i -E "secret|password"`.
-
-## 9. Cập nhật phiên bản và rollback
-
-### Cập nhật
-
-**Chạy trên server:**
-
-```bash
-cd ~/brewlite
-# Nếu bản này có migration mới, backup trước (mục 10)
-git fetch --tags && git checkout <main hoặc vX.Y.Z> && git pull --ff-only
-export APP_VERSION=$(git rev-parse --short HEAD)
-docker compose -f docker-compose.prod.yml up -d --build
-curl -fsS https://<domain>/api/health
-```
-
-Chỉ container có thay đổi mới bị tạo lại. Đổi `SITE_ADDRESS` thì phải build lại `frontend`.
-
-### Rollback ứng dụng
-
-Image của các lần deploy trước vẫn còn trên server, gắn tag theo commit:
-
-```bash
-docker images | grep -E "brewlite-(api|web)"       # xem các APP_VERSION còn lại
-export APP_VERSION=<tag-cũ>
-docker compose -f docker-compose.prod.yml up -d --no-build
-curl -fsS https://<domain>/api/health
-```
-
-Nếu image cũ đã bị dọn, checkout lại commit/tag cũ rồi chạy `up -d --build`.
-
-### Rollback database
-
-Prisma migration chỉ đi tới, không có "down". Vì vậy:
+**Database:** Prisma migration chỉ đi tới, không có "down". Vì vậy:
 
 - Viết migration tương thích ngược (thêm cột/bảng; không xóa hoặc đổi tên cột trong cùng release với code dùng nó).
-- Backup trước mọi release có migration (mục 10).
-- Chỉ khi migration làm hỏng dữ liệu mới khôi phục (mất mọi thay đổi sau thời điểm backup):
+- Backup trước mọi release có migration (mục 11).
+- Chỉ khi migration làm hỏng dữ liệu mới khôi phục (mất thay đổi sau thời điểm backup):
+  ```bash
+  cd ~/brewlite
+  docker compose -f docker-compose.prod.yml stop api
+  docker compose -f docker-compose.prod.yml exec -T db \
+    pg_restore --clean --if-exists -U brewlite -d brewlite < ~/backups/<file>.dump
+  docker compose -f docker-compose.prod.yml start api
+  ```
+- Không dùng `prisma db push` hay `migrate reset` trên production.
 
-```bash
-docker compose -f docker-compose.prod.yml stop backend
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_restore --clean --if-exists -U brewlite -d brewlite < ~/backups/<file>.dump
-docker compose -f docker-compose.prod.yml start backend
-```
+**Cấu hình sai:** sửa `~/brewlite/.env` rồi `docker compose -f docker-compose.prod.yml up -d`. Riêng `NEXT_PUBLIC_*` phải sửa Variable trên GitHub và build lại image web.
 
-Không dùng `prisma db push` hay `migrate reset` trên production.
+## 11. Backup
 
-## 10. Backup
+Dữ liệu nằm ở volume `pgdata` trên EBS. Dùng hai lớp theo rủi ro "mất dữ liệu" trong docx:
 
-Tạo `~/backup.sh` trên server:
+**11.1 `pg_dump` định kỳ.** Tạo `~/backup.sh` trên server:
 
 ```bash
 #!/usr/bin/env bash
@@ -340,7 +608,6 @@ mkdir -p ~/backups
 FILE=~/backups/brewlite-$(date +%F-%H%M).dump
 docker compose -f docker-compose.prod.yml exec -T db \
   pg_dump -U brewlite -Fc brewlite > "$FILE"
-# giữ 7 ngày gần nhất
 find ~/backups -name 'brewlite-*.dump' -mtime +7 -delete
 ```
 
@@ -349,55 +616,66 @@ chmod +x ~/backup.sh
 (crontab -l 2>/dev/null; echo '0 3 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backup.log 2>&1') | crontab -
 ```
 
-Backup nằm cùng ổ đĩa với database nên **chưa chống được mất instance**. Nên đẩy thêm lên S3: tạo bucket riêng tư, gắn IAM role chỉ có quyền ghi vào bucket đó cho instance, rồi thêm `aws s3 cp "$FILE" s3://<bucket>/` vào cuối script. Có thể bật thêm EBS snapshot định kỳ (Amazon Data Lifecycle Manager).
+**11.2 Snapshot EBS.** Bật **Amazon Data Lifecycle Manager** (EC2 → Lifecycle Manager) tạo snapshot hằng ngày cho volume gốc, giữ 7 bản. Snapshot nằm ngoài instance nên chống được mất instance; file `pg_dump` thì nằm cùng ổ đĩa nên nên chép thêm ra ngoài (ví dụ S3 bucket riêng tư qua IAM role) nếu cần.
 
-## 11. Vận hành
+Thử khôi phục từ backup ít nhất một lần trước khi bàn giao.
 
-| Việc | Lệnh |
+## 12. Vận hành
+
+| Việc | Lệnh (trong `~/brewlite`) |
 |---|---|
 | Trạng thái | `docker compose -f docker-compose.prod.yml ps` |
-| Log API | `docker compose -f docker-compose.prod.yml logs -f --tail=100 backend` |
-| Khởi động lại một dịch vụ | `docker compose -f docker-compose.prod.yml restart backend` |
-| Dọn image không dùng | `docker image prune -f` (image có tag `APP_VERSION` được giữ) |
-| Dung lượng đĩa | `df -h` và `docker system df` |
+| Log API | `docker compose -f docker-compose.prod.yml logs -f --tail=100 api` |
+| Log nginx | `docker compose -f docker-compose.prod.yml logs --tail=100 nginx` |
+| Khởi động lại một dịch vụ | `docker compose -f docker-compose.prod.yml restart api` |
+| Dọn image cũ không dùng | `docker image prune -af --filter "until=720h"` |
+| Dung lượng | `df -h` và `docker system df` |
 
-- **Tự chạy lại khi reboot:** `restart: unless-stopped` và Docker bật mặc định khi khởi động nên stack tự lên lại sau khi instance reboot.
-- **Log:** API ghi stdout (method, đường dẫn, status, thời gian; không ghi header hay body). Để tránh log Docker phình to, thêm vào `/etc/docker/daemon.json` rồi `sudo systemctl restart docker`:
-  ```json
-  { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
-  ```
-- **Vá lỗi hệ điều hành:** `sudo apt-get update && sudo apt-get -y upgrade` định kỳ; có thể bật `unattended-upgrades`.
-- **Seed trên production:** `CMD` của API chạy `prisma db seed` mỗi lần khởi động và tạo tài khoản demo có mật khẩu công khai. Chấp nhận được cho môi trường chấm điểm/demo; nếu chạy thật thì tắt phần seed tài khoản demo.
+- Log giới hạn 10 MB × 3 file mỗi container (cấu hình `x-logging`). API ghi stdout: method, đường dẫn, status, thời gian; không ghi header hay body.
+- Sau khi instance reboot, container tự chạy lại nhờ `restart: unless-stopped`.
+- Cập nhật hệ điều hành định kỳ: `sudo apt-get update && sudo apt-get -y upgrade`; có thể bật `unattended-upgrades`.
+- `CMD` của API chạy `prisma db seed` mỗi lần khởi động và tạo tài khoản demo có mật khẩu công khai. Chấp nhận cho môi trường chấm điểm; nếu chạy thật thì tắt phần seed tài khoản demo.
 
-## 12. Xử lý sự cố thường gặp
+## 13. Sự cố thường gặp
 
 | Triệu chứng | Nguyên nhân thường gặp | Cách xử lý |
 |---|---|---|
-| Caddy không cấp được chứng chỉ | DNS chưa trỏ về Elastic IP, cổng 80/443 chưa mở trong security group | `nslookup <domain>`, kiểm tra security group, xem `logs caddy` |
-| Web lên nhưng gọi API lỗi / `localhost:4000` | image `frontend` build với `NEXT_PUBLIC_API_URL` sai hoặc cũ | sửa `SITE_ADDRESS` rồi `up -d --build frontend` |
-| API trả 404 với `/api/...` | Caddyfile không dùng `handle_path` (không bỏ tiền tố `/api`) | dùng đúng Caddyfile ở mục 6 |
-| Build bị kill / `exit 137` | hết RAM | kiểm tra swap (`free -h`), dùng t3.small trở lên |
-| `backend` restart liên tục | sai `DATABASE_URL`/mật khẩu, hoặc migration lỗi | `logs backend`; nếu đã đổi `POSTGRES_PASSWORD` sau lần chạy đầu, volume DB vẫn giữ mật khẩu cũ, cần đặt lại đúng mật khẩu cũ hoặc đổi bằng `ALTER USER` |
-| Lỗi CORS | `FRONTEND_URL` không khớp origin trình duyệt đang dùng | truy cập đúng `https://<SITE_ADDRESS>`; nhiều origin thì ngăn cách bằng dấu phẩy |
-| Hết dung lượng đĩa | image/build cache cũ | `docker image prune -f`, `docker builder prune -f` |
+| nginx không lên, log báo thiếu `/etc/letsencrypt/live/brewlite/...` | chưa lấy chứng chỉ, hoặc `--cert-name` khác `brewlite` | làm lại mục 5.5 |
+| `certbot` báo lỗi cổng 80 | nginx đang chạy | dừng `brewlite-nginx` rồi chạy lại, hoặc kiểm tra hook ở mục 5.5 |
+| Chứng chỉ không cấp được | DNS chưa trỏ về Elastic IP, Security Group chưa mở 80 | `nslookup`, kiểm tra Security Group |
+| Web lên nhưng gọi `localhost:4000` hoặc sai API | image web build với `NEXT_PUBLIC_API_URL` sai/cũ | sửa Variable `PROD_API_URL`, chạy lại CD |
+| Lỗi CORS | `APP_DOMAIN` trong `.env` không khớp origin đang dùng | sửa `.env`, `up -d`; nhiều origin thì ngăn cách bằng dấu phẩy trong `FRONTEND_URL` |
+| 502 từ nginx sau khi deploy | `api` chưa sẵn sàng hoặc migration lỗi | `logs api`; `deploy.sh` sẽ tự rollback nếu smoke test lỗi |
+| `api` restart liên tục | sai `DATABASE_URL`/mật khẩu | đã đổi `POSTGRES_PASSWORD` trong `.env` sau lần chạy đầu, nhưng volume `pgdata` vẫn giữ mật khẩu cũ; đặt lại đúng mật khẩu cũ hoặc đổi bằng `ALTER USER` |
+| `pull access denied` | server chưa `docker login ghcr.io` hoặc package chưa gắn với repo | chạy lại CD (bước đăng nhập GHCR); kiểm tra nhãn `org.opencontainers.image.source` |
+| CD lỗi ở bước SSH | Security Group chặn cổng 22 từ runner, sai key | xem lưu ý cổng 22 ở mục 4.2 |
+| Hết dung lượng đĩa | image cũ | `docker image prune -af --filter "until=720h"` |
 
-## 13. Ghi chú về repo
+## 14. Đồng bộ với tài liệu MVP và repo
 
-- Workflow `.github/workflows/nextjs.yml` (deploy web lên GitHub Pages, nhánh `production`) **không dùng** cho cách triển khai này; web chạy trong container. Nếu không cần thì xóa để tránh nhầm.
-- `.github/workflows/node.js.yml` vẫn là CI (lint, test, build, e2e) và nên giữ làm required check cho `main`.
-- Có thể tự động hóa deploy sau này bằng job CD: SSH vào EC2 (khóa lưu ở GitHub Secrets) chạy lệnh ở mục 9, hoặc build image lên GHCR rồi cho server `pull` (theo ADR-010). Hiện tài liệu này mô tả cách deploy thủ công.
+Việc cần làm để repo khớp `task1-3-MVP.docx`:
 
-## 14. Checklist bàn giao
+- ⬜ Đổi `docs/architecture/adr/011-render-platform.md` thành `011-aws-ec2-platform.md` (quyết định EC2, phương án Render đã cân nhắc, rủi ro chi phí và vận hành).
+- ⬜ Tạo `docker-compose.prod.yml`, `nginx/default.conf.template`, `deploy/deploy.sh`, `.github/workflows/cd.yml` (mục 6, 7).
+- ⬜ Đổi `node.js.yml` thành `ci.yml`; xóa `nextjs.yml` nếu bỏ GitHub Pages.
+- ⬜ Vẽ UML deployment `docs/diagrams/deployment-production.puml` + `.svg` (Hình 3.4) khớp mục 2.
+- ⬜ Quyết định cổng 22 (mục 4.2) và sửa câu "22 từ IP của nhóm" trong docx nếu chọn cách (a).
+- ⬜ Docx ghi cổng DB local `5432`, còn `docker-compose.yml` hiện dùng `5433` ở host; sửa một trong hai cho khớp.
 
-- [ ] `https://<domain>` mở được qua HTTPS (chứng chỉ hợp lệ)
-- [ ] `https://<domain>/api/health` trả 200 với `"database":"up"`
-- [ ] Security group chỉ mở 80/443 ra Internet; SSH (22) giới hạn theo IP; 3000/4000/5432 không truy cập được từ ngoài
-- [ ] Instance dùng Elastic IP; DNS trỏ đúng
-- [ ] `JWT_SECRET` và `POSTGRES_PASSWORD` production là giá trị ngẫu nhiên, khác mặc định; `.env` không nằm trong Git
+## 15. Checklist bàn giao
+
+- [ ] `https://app.<domain>` mở được qua HTTPS (chứng chỉ hợp lệ)
+- [ ] `https://api.<domain>/health` trả 200 với `"database":"up"`
+- [ ] Security Group: Internet chỉ vào 80/443; 3000, 4000, 5432 không truy cập được từ ngoài
+- [ ] Instance dùng Elastic IP; Route 53 trỏ đúng
+- [ ] `JWT_SECRET`, `POSTGRES_PASSWORD` production là giá trị ngẫu nhiên; `.env` không nằm trong Git
 - [ ] Quét secret toàn lịch sử Git sạch (`gitleaks detect --source . --log-opts="--all"`)
-- [ ] Cron backup chạy được và đã thử khôi phục ít nhất một lần
-- [ ] Đã thử rollback về `APP_VERSION` trước
+- [ ] Pipeline CD chạy thành công một lần, kèm một lần smoke test thất bại tự rollback làm minh chứng
+- [ ] Gia hạn chứng chỉ thử thành công (`certbot renew --dry-run`)
+- [ ] Backup `pg_dump` và snapshot EBS chạy; đã thử khôi phục một lần
+- [ ] AWS Budgets có cảnh báo chi phí
 - [ ] Tag `vX.Y.Z` và release notes trên GitHub
-- [ ] Sơ đồ UML deployment trong `docs/diagrams/` khớp với mục 1
-- [ ] README trỏ về tài liệu này
+- [ ] UML deployment trong `docs/diagrams/` khớp tài liệu này
+- [ ] README trỏ về tài liệu này (local, test, build, deploy, rollback)
 - [ ] Video demo luồng end-to-end
+- [ ] Giảng viên có quyền truy cập repository
