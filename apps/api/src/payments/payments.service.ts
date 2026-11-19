@@ -9,6 +9,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { PAYMENT_PROCESSING_TTL_MS, refundWindowMs } from '../common/constants';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { EventPublisher } from '../messaging/event-publisher.service';
+import { ORDER_EVENTS } from '../messaging/messaging.constants';
 import { OrdersService } from '../orders/orders.service';
 import { transitionOrder } from '../orders/order-transitions';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +30,8 @@ export class PaymentsService {
     private readonly gateway: MockPaymentGateway,
     private readonly orders: OrdersService,
     private readonly loyalty: LoyaltyService,
+    // Tùy chọn để test đơn vị không cần RabbitMQ; khi chạy thật Nest luôn inject
+    private readonly events?: EventPublisher,
   ) {}
 
   /**
@@ -149,6 +153,7 @@ export class PaymentsService {
     }
 
     // ---- Bước 3: lưu kết quả trong một transaction ----
+    let becamePaid = false;
     await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
@@ -189,6 +194,7 @@ export class PaymentsService {
       await transitionOrder(tx, order, result.ok ? 'PAID' : 'PAYMENT_FAILED');
 
       if (result.ok) {
+        becamePaid = true;
         // Cộng điểm đúng 1 lần (cờ pointsAwarded + bút toán EARN unique theo đơn), cùng transaction.
         const flag = await tx.order.updateMany({
           where: { id: order.id, pointsAwarded: false },
@@ -199,6 +205,15 @@ export class PaymentsService {
         }
       }
     });
+
+    // Chỉ báo "đã thanh toán" khi transaction thật sự chuyển đơn sang PAID (không báo khi replay)
+    if (becamePaid) {
+      this.events?.publish(ORDER_EVENTS.PAID, {
+        orderId: dto.orderId,
+        userId,
+        total: amount,
+      });
+    }
 
     return this.buildResponse(userId, paymentId, false);
   }
@@ -307,6 +322,7 @@ export class PaymentsService {
     }
 
     // ---- Bước 3: ghi kết quả trong một transaction ----
+    let refundedNow = false;
     await this.prisma.$transaction(async (tx) => {
       const saved = await tx.payment.updateMany({
         where: { id: claimed.paymentId, status: 'REFUNDING' },
@@ -319,7 +335,16 @@ export class PaymentsService {
       if (saved.count !== 1) return;
       await this.orders.refundInTx(tx, orderId);
       await this.loyalty.revoke(tx, userId, orderId, claimed.pointsToRevoke);
+      refundedNow = true;
     });
+
+    if (refundedNow) {
+      this.events?.publish(ORDER_EVENTS.REFUNDED, {
+        orderId,
+        userId,
+        total: claimed.amount,
+      });
+    }
 
     return {
       refunded: true,

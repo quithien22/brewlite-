@@ -2,6 +2,7 @@
 #   Frontend : http://localhost:3000
 #   Backend  : http://localhost:4000
 #   Postgres : localhost:5433 (brewlite)
+#   RabbitMQ : giao diện quản trị http://localhost:15672 (chỉ mở trong máy; trên EC2 dùng SSH tunnel)
 services:
   db:
     image: postgres:16-alpine
@@ -20,16 +21,39 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-brewlite}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-brewlite}
+    ports:
+      # Chỉ giao diện quản trị, và chỉ bind vào localhost. Không publish 5672:
+      # backend gọi rabbitmq:5672 qua mạng nội bộ của compose.
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - brewlite-rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
   backend:
     build: ./apps/api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-brewlite}:${POSTGRES_PASSWORD:-brewlite}@db:5432/${POSTGRES_DB:-brewlite}?schema=public
       JWT_SECRET: ${JWT_SECRET:-doi-thanh-chuoi-bi-mat-dai-va-ngau-nhien}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Mật khẩu RabbitMQ nên chỉ gồm chữ và số (nếu có ký tự đặc biệt phải URL-encode trong URL này)
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-brewlite}:${RABBITMQ_PASSWORD:-brewlite}@rabbitmq:5672
       PORT: "4000"
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # Cho phép ép thanh toán mô phỏng thất bại (chỉ dùng khi demo)
@@ -53,3 +77,4 @@ services:
 
 volumes:
   brewlite-db:
+  brewlite-rabbitmq:

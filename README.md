@@ -26,6 +26,7 @@ MVP đi từ **chọn sản phẩm → giỏ hàng → thanh toán → xác nh�
 | Frontend (`apps/web`) | Next.js (App Router), React, TypeScript, Tailwind CSS, Zustand |
 | Backend (`apps/api`) | NestJS, Passport JWT, class-validator, bcryptjs |
 | Cơ sở dữ liệu | PostgreSQL 16, Prisma (migration + seed) |
+| Message broker | RabbitMQ 3 (sự kiện đơn hàng, qua `@nestjs/microservices`) |
 | Kiểm thử | Postman, `node:test` (E2E) |
 | Hạ tầng | Docker, Docker Compose, GitHub Actions; kế hoạch triển khai: Render + GHCR |
 
@@ -38,14 +39,16 @@ flowchart LR
   U[Trình duyệt / PWA] -->|HTTP| W[Web - Next.js :3000]
   U -->|REST + JWT| A[API - NestJS :4000]
   A --> D[(PostgreSQL)]
+  A -->|publish sự kiện đơn hàng| Q{{RabbitMQ}}
+  Q -->|consume| A
   A --> G[Cổng thanh toán mô phỏng]
   subgraph API modules
     direction TB
-    auth --- products --- orders --- payments --- promotions --- loyalty --- health
+    auth --- products --- orders --- payments --- promotions --- loyalty --- messaging --- health
   end
 ```
 
-Các module trong `apps/api/src`: `auth`, `products`, `orders`, `payments`, `promotions`, `loyalty`, `health`, `prisma`, `common`.
+Các module trong `apps/api/src`: `auth`, `products`, `orders`, `payments`, `promotions`, `loyalty`, `messaging`, `health`, `prisma`, `common`.
 
 ## Cấu trúc repository
 
@@ -73,7 +76,7 @@ brewlite/
 | `apps/web/` | Next.js + TailwindCSS + Zustand — xem `apps/web/README.md` |
 | `docs/` | Tài liệu: yêu cầu, sơ đồ, kiến trúc (ADR), ma trận truy vết, triển khai |
 | `tests/` | Test chạy trên hệ thống thật — xem `tests/README.md` |
-| `docker-compose.yml` | Chạy cả 3: frontend, backend, DB |
+| `docker-compose.yml` | Chạy cả 4: frontend, backend, DB, RabbitMQ |
 
 ## Chạy bằng Docker
 
@@ -84,6 +87,7 @@ docker compose up --build
 - Frontend: http://localhost:3000
 - Backend: http://localhost:4000 (health check: http://localhost:4000/health)
 - PostgreSQL: `localhost:5433` (user / mật khẩu / database đều là `brewlite`). Cổng 5433 trên máy host để không đụng PostgreSQL cài sẵn ở 5432; bên trong Docker backend vẫn nối tới `db:5432`.
+- RabbitMQ: giao diện quản trị http://localhost:15672 (user / mật khẩu mặc định `brewlite`), chỉ mở trong máy. Cổng AMQP 5672 không publish ra ngoài; backend nối tới `rabbitmq:5672` trong mạng nội bộ của Compose. Trên EC2 mở giao diện qua SSH tunnel: `ssh -i key.pem -L 15672:localhost:15672 ubuntu@<public-ip>` rồi vào http://localhost:15672.
 - Lần đầu backend tự chạy migration (`prisma migrate deploy`) rồi nạp dữ liệu mẫu.
 - Nếu trước đây đã chạy bản dùng `db push` hoặc mật khẩu DB đã đổi, chạy `docker compose down -v` một lần để tạo lại database sạch (**xóa toàn bộ dữ liệu trong DB**).
 - Muốn đổi mật khẩu DB, `JWT_SECRET`... thì sao chép `.env.example` thành `.env` rồi sửa (không có `.env` thì dùng giá trị mặc định).
@@ -113,6 +117,8 @@ npm run dev                     # http://localhost:3000
 npx prisma studio               # http://localhost:5555
 ```
 
+Chạy thủ công không cần RabbitMQ: để trống `RABBITMQ_URL` trong `apps/api/.env`, API vẫn chạy bình thường (chỉ không gửi / nhận sự kiện đơn hàng).
+
 Dán từng lệnh một vào terminal, không dán lệnh vào file `.env`.
 
 ## Biến môi trường
@@ -129,6 +135,8 @@ Chỉ commit các file `.env.example`, không commit giá trị thật.
 | `FRONTEND_URL` | api | `http://localhost:3000` | Origin cho CORS (nhiều origin cách nhau dấu phẩy) |
 | `ORDER_EXPIRE_MINUTES` | api | `15` | Đơn chưa thanh toán quá hạn thì tự hủy |
 | `REFUND_WINDOW_MINUTES` | api | `5` | Thời hạn tự hủy + hoàn tiền đơn đã thanh toán |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | rabbitmq | `brewlite` | Tài khoản RabbitMQ; chỉ dùng chữ và số, **đổi khi triển khai thật** |
+| `RABBITMQ_URL` | api | Compose tự đặt `amqp://…@rabbitmq:5672` | Địa chỉ broker; để trống thì tắt gửi / nhận sự kiện |
 | `MOCK_PAYMENT_ALLOW_FAILURE` | api | `true` | Cho phép ép thanh toán mô phỏng thất bại (chỉ để demo) |
 | `NEXT_PUBLIC_API_URL` | web | `http://localhost:4000` | Địa chỉ API, nhúng vào bundle lúc build |
 | `NEXT_PUBLIC_ALLOW_MOCK_FAILURE` | web | `true` | Hiện checkbox "Chế độ demo" ở trang thanh toán |
@@ -171,6 +179,25 @@ stateDiagram-v2
 ```
 
 Chuyển trạng thái sai trả HTTP `409`. Cài đặt: `apps/api/src/orders/order-state-machine.ts`.
+
+### Sự kiện đơn hàng (RabbitMQ)
+
+Sau khi transaction commit, API gửi sự kiện sang RabbitMQ để các xử lý phụ (thông báo cho khách, báo quầy pha chế...) chạy bất đồng bộ, không làm chậm hay làm hỏng việc đặt đơn và thanh toán.
+
+| Sự kiện | Phát khi | Nơi phát |
+|---|---|---|
+| `order.created` | Tạo đơn `PENDING` thành công | `OrdersService.create` |
+| `order.paid` | Đơn chuyển sang `PAID` (không phát lại khi gửi lại cùng `Idempotency-Key`) | `PaymentsService.pay` |
+| `order.cancelled` | Khách hủy hoặc đơn quá hạn (`reason`: `USER` / `EXPIRED`) | `OrdersService.cancel`, `expireStale` |
+| `order.refunded` | Hủy + hoàn tiền thành công | `PaymentsService.refund` |
+
+Nội dung message: `{ orderId, userId, total, reason?, occurredAt }`.
+
+- Queue `brewlite.order_events` (durable, message persistent). Producer là `EventPublisher`, consumer là `OrderEventsController` (hiện chỉ ghi log), cùng nằm trong `apps/api/src/messaging/`.
+- Consumer ack thủ công; xử lý lỗi thì `nack` và không đưa lại hàng đợi, để một message hỏng không bị giao lại vô hạn.
+- Không có `RABBITMQ_URL` thì tắt hoàn toàn. RabbitMQ lỗi chỉ ghi log, không làm hỏng nghiệp vụ.
+- Gửi sự kiện là best-effort, chưa dùng transactional outbox: nếu API tắt hoặc broker mất đúng lúc đó thì sự kiện có thể bị bỏ lỡ.
+- Xem kết quả: `docker compose logs -f backend` (dòng `[OrderEvents]`), hoặc xem queue ở giao diện quản trị http://localhost:15672.
 
 ### Quy tắc giá và điểm thưởng
 
@@ -314,6 +341,7 @@ Chạy E2E (cần API + DB đã chạy và đã seed): `node tests/e2e/smoke.mjs
 | Prisma Studio mở được nhưng không có bảng / "Unable to run script" | Migration chưa chạy hoặc DB chưa kết nối được. Chạy `npx prisma migrate deploy` trước. |
 | Web báo "Không thể kết nối tới máy chủ" (`ERR_CONNECTION_REFUSED`) | Backend chưa chạy ở cổng 4000. Chạy `npm run start:dev` trong `apps/api` (hoặc `docker compose up -d --build backend`). |
 | TypeScript báo thiếu `REFUNDED` / `REVOKE` | Chạy `npx prisma migrate deploy` rồi `npx prisma generate` trong `apps/api`. |
+| Không thấy log `[OrderEvents]` sau khi đặt đơn | Kiểm tra biến có vào container không: `docker compose exec backend printenv RABBITMQ_URL`, rồi xem `docker compose logs rabbitmq backend`. Báo `PRECONDITION_FAILED` nghĩa là queue cũ khai báo khác tham số: xóa queue `brewlite.order_events` trong giao diện quản trị hoặc `docker compose down -v` (xóa cả dữ liệu DB). |
 
  
 
