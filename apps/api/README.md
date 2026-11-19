@@ -67,6 +67,22 @@ Nếu khách đã tiêu bớt điểm của đơn này (còn ít hơn số đi�
 | Khuyến mãi & điểm thưởng | `src/promotions/*`, `src/loyalty/*` (sổ điểm EARN/REDEEM/REFUND/REVOKE), `src/common/pricing.ts` (1 điểm = 500đ; +1 điểm / 10.000đ, cộng đúng 1 lần khi `PAID`) |
 | Tự hủy đơn quá hạn | `src/orders/order-expiry.service.ts` |
 
+## Sự kiện đơn hàng (RabbitMQ)
+
+Code trong `src/messaging/`. `EventPublisher` gửi sự kiện **sau khi transaction commit**, `OrderEventsController` nhận từ queue `brewlite.order_events` (hiện chỉ ghi log).
+
+| Sự kiện | Phát từ |
+|---|---|
+| `order.created` | `OrdersService.create` |
+| `order.paid` | `PaymentsService.pay` (chỉ khi đơn thật sự chuyển sang `PAID`, không phát khi replay `Idempotency-Key`) |
+| `order.cancelled` | `OrdersService.cancel` (`reason: USER`) và `expireStale` (`reason: EXPIRED`) |
+| `order.refunded` | `PaymentsService.refund` |
+
+- Bật bằng biến `RABBITMQ_URL` (`amqp://user:pass@host:5672`). Để trống thì `EventPublisher` không làm gì và consumer không khởi động, nên chạy local hoặc chạy test không cần RabbitMQ.
+- RabbitMQ lỗi chỉ ghi log, không làm hỏng đặt đơn / thanh toán. Consumer khởi động không chặn API: nếu broker chưa lên, API vẫn phục vụ HTTP và consumer tự kết nối sau.
+- Producer và consumer phải khai báo queue giống nhau (`ORDER_EVENTS_QUEUE_OPTIONS` trong `messaging.constants.ts`), lệch sẽ bị RabbitMQ báo `PRECONDITION_FAILED`.
+- Thử nhanh: chạy cả hệ bằng `docker compose up --build` ở thư mục gốc, đặt và thanh toán một đơn rồi xem `docker compose logs -f backend` (dòng `[OrderEvents]`).
+
 ## Kiểm thử
 
 ```bash
@@ -84,6 +100,6 @@ npm test
 
 ## Biến môi trường
 
-Xem `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `FRONTEND_URL` (CORS, nhiều origin cách nhau dấu phẩy), `ORDER_EXPIRE_MINUTES`, `REFUND_WINDOW_MINUTES`.
+Xem `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `FRONTEND_URL` (CORS, nhiều origin cách nhau dấu phẩy), `ORDER_EXPIRE_MINUTES`, `REFUND_WINDOW_MINUTES`, `RABBITMQ_URL` (tùy chọn; để trống thì tắt RabbitMQ).
 
 > Lưu ý: thư mục này còn các file sinh ra từ `create-next-app` (`app/`, `next.config.ts`, `eslint.config.mjs`, `next-env.d.ts`, `AGENTS.md`, `public/`, `.next/`). Backend NestJS không dùng chúng (`tsconfig.build.json` chỉ biên dịch `src/`), có thể xóa an toàn.

@@ -9,6 +9,8 @@ import { Prisma } from '@prisma/client';
 import { PAYMENT_PROCESSING_TTL_MS } from '../common/constants';
 import { POINT_VALUE, calcUnitPrice, earnedPoints } from '../common/pricing';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { EventPublisher } from '../messaging/event-publisher.service';
+import { ORDER_EVENTS } from '../messaging/messaging.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { PromotionsService } from '../promotions/promotions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -35,6 +37,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly promotions: PromotionsService,
     private readonly loyalty: LoyaltyService,
+    private readonly events: EventPublisher,
   ) {}
 
   /**
@@ -167,7 +170,14 @@ export class OrdersService {
       { timeout: 15000, maxWait: 10000 },
     );
 
-    return this.findOneForUser(userId, orderId);
+    const created = await this.findOneForUser(userId, orderId);
+    // Gửi sự kiện SAU khi transaction đã commit; lỗi RabbitMQ không làm hỏng việc đặt đơn
+    this.events.publish(ORDER_EVENTS.CREATED, {
+      orderId,
+      userId,
+      total: created.total,
+    });
+    return created;
   }
 
   /** GET /orders/me — lịch sử đơn (lọc + phân trang) */
@@ -296,7 +306,14 @@ export class OrdersService {
       await this.cancelInTx(tx, order);
     });
 
-    return this.findOneForUser(userId, id);
+    const cancelled = await this.findOneForUser(userId, id);
+    this.events.publish(ORDER_EVENTS.CANCELLED, {
+      orderId: id,
+      userId,
+      total: cancelled.total,
+      reason: 'USER',
+    });
+    return cancelled;
   }
 
   /**
@@ -317,17 +334,25 @@ export class OrdersService {
     let cancelled = 0;
     for (const { id } of candidates) {
       try {
-        const done = await this.prisma.$transaction(async (tx) => {
+        const owner = await this.prisma.$transaction(async (tx) => {
           const order = await tx.order.findUnique({
             where: { id },
             include: { items: true },
           });
-          if (!order || !CANCELLABLE_STATUSES.includes(order.status)) return false;
-          if (await this.hasLiveProcessingPayment(tx, id)) return false;
+          if (!order || !CANCELLABLE_STATUSES.includes(order.status)) return null;
+          if (await this.hasLiveProcessingPayment(tx, id)) return null;
           await this.cancelInTx(tx, order);
-          return true;
+          return { userId: order.userId, total: order.total };
         });
-        if (done) cancelled++;
+        if (owner) {
+          cancelled++;
+          this.events.publish(ORDER_EVENTS.CANCELLED, {
+            orderId: id,
+            userId: owner.userId,
+            total: owner.total,
+            reason: 'EXPIRED',
+          });
+        }
       } catch {
         // Đơn vừa được cập nhật ở nơi khác (khách thanh toán / hủy): thử lại ở lượt sau
       }

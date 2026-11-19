@@ -2,8 +2,13 @@
 import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
+import {
+  ORDER_EVENTS_QUEUE,
+  ORDER_EVENTS_QUEUE_OPTIONS,
+} from './messaging/messaging.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +44,32 @@ async function bootstrap() {
   );
 
   app.enableShutdownHooks();
+
+  // RabbitMQ: nhận sự kiện đơn hàng. Chỉ bật khi có RABBITMQ_URL.
+  const rabbitUrl = process.env.RABBITMQ_URL;
+  if (rabbitUrl) {
+    const mqLogger = new Logger('RabbitMQ');
+    app.connectMicroservice<MicroserviceOptions>({
+      transport: Transport.RMQ,
+      options: {
+        urls: [rabbitUrl],
+        queue: ORDER_EVENTS_QUEUE,
+        queueOptions: ORDER_EVENTS_QUEUE_OPTIONS,
+        noAck: false,
+        prefetchCount: 10,
+      },
+    });
+    // Cố ý KHÔNG await: nếu RabbitMQ chưa sẵn sàng thì API HTTP vẫn khởi động bình thường,
+    // consumer tự kết nối khi RabbitMQ lên.
+    app
+      .startAllMicroservices()
+      .then(() => mqLogger.log(`Consumer đã kết nối, đang nghe queue ${ORDER_EVENTS_QUEUE}`))
+      .catch((e) =>
+        mqLogger.error(
+          `Không khởi động được consumer: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+  }
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);

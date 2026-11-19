@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,6 +15,7 @@ import { PromotionsModule } from './promotions/promotions.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    MessagingModule,
     AuthModule,
     ProductsModule,
     PromotionsModule,
