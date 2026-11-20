@@ -1,0 +1,216 @@
+@startuml BrewLite_ClassDiagram
+title BrewLite – Sơ đồ lớp (Class Diagram)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam roundCorner 0
+skinparam defaultFontName Arial
+skinparam defaultFontSize 16
+skinparam defaultFontColor #000000
+skinparam titleFontSize 22
+skinparam nodesep 50
+skinparam ranksep 70
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #000000
+  ArrowColor #000000
+  FontColor #000000
+  AttributeFontColor #000000
+}
+hide circle
+hide empty members
+
+' ===== Lớp (tên lớp / thuộc tính / phương thức) =====
+class User {
+  - id: number
+  - name: string
+  - email: string «unique»
+  - phone?: string
+  - passwordHash: string
+  - loyaltyPoints: number
+  - createdAt: Date
+  --
+  + verifyPassword(raw: string): boolean
+  + updateProfile(name: string, phone?: string): void
+  + addLoyaltyPoints(points: number): void
+  + redeemLoyaltyPoints(points: number): boolean
+}
+
+class LoyaltyTransaction {
+  - id: number
+  - type: LoyaltyType
+  - points: number
+  - createdAt: Date
+  --
+  + getSignedPoints(): number
+}
+
+class Promotion {
+  - id: number
+  - code: string «unique»
+  - title: string
+  - type: DiscountType
+  - value: number
+  - minOrder: number
+  - maxDiscount?: number
+  - startsAt: Date
+  - endsAt: Date
+  - usageLimit?: number
+  - usedCount: number
+  - isActive: boolean
+  --
+  + isValid(subtotal: number, now: Date): boolean
+  + calculateDiscount(subtotal: number): number
+  + increaseUsage(): void
+}
+
+class Order {
+  - id: number
+  - status: OrderStatus
+  - subtotal: number
+  - discount: number
+  - pointsUsed: number
+  - total: number
+  - couponCode?: string
+  - note?: string «≤ 200»
+  - createdAt: Date
+  - updatedAt: Date
+  - version: number
+  --
+  + calculateSubtotal(): number
+  + calculateTotal(): number
+  + applyPromotion(promotion: Promotion): void
+  + applyPoints(points: number): void
+  + updateStatus(status: OrderStatus): void
+  + cancel(): void
+}
+
+class OrderStatusLog {
+  - id: number
+  - status: OrderStatus
+  - createdAt: Date
+  --
+  + getStatus(): OrderStatus
+}
+
+class Payment {
+  - id: number
+  - idempotencyKey: string «unique»
+  - amount: number
+  - method: PaymentMethod
+  - status: PaymentStatus
+  - transactionId?: string
+  - failureReason?: string
+  - createdAt: Date
+  --
+  + process(): PaymentStatus
+  + markSuccess(transactionId: string): void
+  + markFailed(reason: string): void
+}
+
+class OrderItem {
+  - id: number
+  - productName: string
+  - size: Size
+  - sugar: number «0|30|50|70|100»
+  - ice: IceLevel
+  - toppings: Json «snapshot»
+  - unitPrice: number
+  - qty: number «1..20»
+  - lineTotal: number
+  --
+  + calculateLineTotal(): number
+  + updateQty(qty: number): void
+}
+
+class Topping {
+  - id: number
+  - name: string
+  - price: number
+  - isActive: boolean
+  --
+  + getPrice(): number
+  + toggleActive(): void
+}
+
+class Product {
+  - id: number
+  - name: string
+  - description: string
+  - category: string
+  - basePrice: number
+  - imageUrl: string
+  - stock: number
+  - isActive: boolean
+  - isFeatured: boolean
+  - version: number
+  --
+  + isAvailable(): boolean
+  + decreaseStock(qty: number): void
+  + updateBasePrice(price: number): void
+}
+
+' ===== Enumeration =====
+class LoyaltyType <<enumeration>> {
+  EARN
+  REDEEM
+  REFUND
+}
+
+class DiscountType <<enumeration>> {
+  PERCENT
+  FIXED
+}
+
+class PaymentMethod <<enumeration>> {
+  WALLET
+  CARD
+}
+
+class PaymentStatus <<enumeration>> {
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+class IceLevel <<enumeration>> {
+  NO_ICE
+  LESS_ICE
+  REGULAR
+}
+
+class Size <<enumeration>> {
+  S
+  M
+  L
+}
+
+class OrderStatus <<enumeration>> {
+  PENDING
+  PAID
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+' ===== Quan hệ =====
+User "1" --> "0..*" LoyaltyTransaction : có sổ điểm
+User "1" --> "0..*" Order : đặt
+LoyaltyTransaction "0..*" --> "0..1" Order : phát sinh từ
+Order "0..*" --> "0..1" Promotion : dùng mã
+Order "1" *-- "1..*" OrderStatusLog : nhật ký trạng thái
+Order "1" --> "0..*" Payment : thanh toán bằng
+Order "1" *-- "1..*" OrderItem : gồm
+OrderItem "0..*" --> "0..*" Topping : chọn kèm
+OrderItem "0..*" --> "1" Product : tham chiếu
+
+' ===== Phụ thuộc kiểu enum =====
+LoyaltyTransaction ..> LoyaltyType
+Promotion ..> DiscountType
+Order ..> OrderStatus
+OrderStatusLog ..> OrderStatus
+Payment ..> PaymentMethod
+Payment ..> PaymentStatus
+OrderItem ..> IceLevel
+OrderItem ..> Size
+
+@enduml
